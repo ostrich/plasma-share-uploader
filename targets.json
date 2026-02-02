@@ -1,0 +1,45 @@
+{
+  "targets": [
+    {
+      "id": "catbox",
+      "displayName": "Catbox",
+      "description": "Upload images to Catbox",
+      "icon": "image-x-generic",
+      "pluginTypes": ["ShareUrl", "Export"],
+      "constraints": ["mimeType:image/*"],
+      "request": {
+        "url": "https://catbox.moe/user/api.php",
+        "method": "POST",
+        "multipart": {
+          "fields": {
+            "reqtype": "fileupload"
+          },
+          "fileField": "fileToUpload"
+        }
+      },
+      "response": {
+        "type": "text_url"
+      }
+    },
+    {
+      "id": "uguu",
+      "displayName": "Uguu.se",
+      "description": "Upload images to uguu.se",
+      "icon": "image-x-generic",
+      "pluginTypes": ["ShareUrl", "Export"],
+      "constraints": ["mimeType:image/*"],
+      "request": {
+        "url": "https://uguu.se/upload",
+        "method": "POST",
+        "multipart": {
+          "fields": {},
+          "fileField": "files[]"
+        }
+      },
+      "response": {
+        "type": "json_pointer",
+        "pointer": "/files/0/url"
+      }
+    }
+  ]
+}

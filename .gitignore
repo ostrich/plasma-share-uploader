@@ -1,0 +1,10 @@
+/build/
+/pkg/
+/src/build/
+/src/ccache/
+/src/ccache-tmp/
+/src/generated/
+*.pkg.tar.*
+/arch/src/
+/arch/pkg/
+/arch/*.pkg.tar.*

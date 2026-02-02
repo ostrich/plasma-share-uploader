@@ -1,0 +1,59 @@
+{
+  "targets": [
+    {
+      "id": "zerox0",
+      "displayName": "0x0.st",
+      "description": "Upload images to 0x0.st",
+      "icon": "image-x-generic",
+      "pluginTypes": ["ShareUrl", "Export"],
+      "constraints": ["mimeType:image/*"],
+      "request": {
+        "url": "https://0x0.st",
+        "method": "POST",
+        "multipart": {
+          "fields": {},
+          "fileField": "file"
+        }
+      },
+      "response": {
+        "type": "text_url"
+      }
+    },
+    {
+      "id": "gofile",
+      "displayName": "Gofile.io",
+      "description": "Upload images to Gofile.io",
+      "icon": "image-x-generic",
+      "pluginTypes": ["ShareUrl", "Export"],
+      "constraints": ["mimeType:image/*"],
+      "request": {
+        "url": "https://upload.gofile.io/uploadfile",
+        "method": "POST",
+        "multipart": {
+          "fields": {},
+          "fileField": "file"
+        }
+      },
+      "response": {
+        "type": "json_pointer",
+        "pointer": "/data/downloadPage"
+      }
+    },
+    {
+      "id": "transfersh",
+      "displayName": "transfer.sh",
+      "description": "Upload images to transfer.sh",
+      "icon": "image-x-generic",
+      "pluginTypes": ["ShareUrl", "Export"],
+      "constraints": ["mimeType:image/*"],
+      "request": {
+        "url": "https://transfer.sh/${FILENAME}",
+        "method": "PUT",
+        "type": "raw"
+      },
+      "response": {
+        "type": "text_url"
+      }
+    }
+  ]
+}

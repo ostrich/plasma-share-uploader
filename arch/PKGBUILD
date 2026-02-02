@@ -1,0 +1,33 @@
+pkgname=plasma-share-uploader-git
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='KDE Purpose share plugins with data-driven upload targets'
+arch=('x86_64')
+url='https://github.com/ostrich/plasma-share-uploader'
+license=('GPL3')
+depends=('qt6-base' 'purpose' 'kcoreaddons' 'knotifications')
+makedepends=('cmake' 'ninja' 'python')
+source=('git+https://github.com/ostrich/plasma-share-uploader.git')
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$srcdir/plasma-share-uploader"
+  git describe --long --tags --always | sed 's/^v//;s/-/./g'
+}
+
+build() {
+  export CC=/usr/bin/cc
+  export CXX=/usr/bin/c++
+  cmake -S "$startdir/.." -B "$srcdir/build" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCMAKE_DISABLE_FIND_PACKAGE_Threads=OFF \
+    -DCMAKE_HAVE_LIBC_PTHREAD=1 \
+    -DCMAKE_USE_PTHREADS_INIT=1 \
+    -DCMAKE_THREAD_LIBS_INIT="-lpthread"
+  cmake --build "$srcdir/build"
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install "$srcdir/build"
+}
