@@ -16,9 +16,7 @@ pkgver() {
 }
 
 build() {
-  export CC=/usr/bin/cc
-  export CXX=/usr/bin/c++
-  cmake -S "$startdir/.." -B "$srcdir/build" \
+  cmake -S "$srcdir/plasma-share-uploader" -B "$srcdir/build" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=/usr \
     -DCMAKE_DISABLE_FIND_PACKAGE_Threads=OFF \
