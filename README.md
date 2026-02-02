@@ -2,6 +2,8 @@
 
 Purpose share plugin for KDE Plasma 6 that uploads files using a data-driven target list.
 
+Lets you easily add new upload targets to the KDE Plasma "Share" menu.
+
 ## Build
 
 ```sh
