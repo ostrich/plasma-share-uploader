@@ -1,6 +1,6 @@
 # plasma-share-uploader
 
-Purpose share plugin for KDE Plasma 6 that uploads images using a data-driven target list.
+Purpose share plugin for KDE Plasma 6 that uploads files using a data-driven target list.
 
 ## Build
 
@@ -16,7 +16,7 @@ cmake --install build
 ```
 
 Plugins install to the Purpose plugin directory (`${KDE_INSTALL_QTPLUGINDIR}/kf6/purpose`).
-Restart Dolphin/Gwenview after installing so the new share action shows up.
+Restart Dolphin/Gwenview/other Purpose-share-enabled app after installing so the new share action shows up.
 
 ## Targets
 
