@@ -159,7 +159,9 @@ QNetworkReply *TargetUploader::upload(const QString &filePath, QNetworkAccessMan
 
     const QString url = applyUrlTemplate(urlTemplate, fileInfo);
     QNetworkRequest requestObj{QUrl::fromUserInput(url)};
-    requestObj.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("plasma-share-uploader/0.1"));
+    requestObj.setHeader(
+        QNetworkRequest::UserAgentHeader,
+        QStringLiteral("plasma-share-uploader/" PLASMA_SHARE_UPLOADER_VERSION));
     requestObj.setTransferTimeout(kUploadTimeoutMs);
     applyHeaders(request, requestObj);
 

@@ -25,6 +25,7 @@ foreach(target_id IN LISTS IMSHARE_TARGET_IDS)
     )
 
     target_compile_definitions(${target_plugin} PRIVATE QT_NO_CAST_FROM_ASCII)
+    target_compile_definitions(${target_plugin} PRIVATE PLASMA_SHARE_UPLOADER_VERSION="${PROJECT_VERSION}")
 
     set_target_properties(${target_plugin} PROPERTIES
         OUTPUT_NAME "${target_id}plugin"

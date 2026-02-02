@@ -6,7 +6,7 @@ arch=('x86_64')
 url='https://github.com/ostrich/plasma-share-uploader'
 license=('GPL3')
 depends=('qt6-base' 'purpose' 'kcoreaddons' 'knotifications')
-makedepends=('cmake' 'ninja' 'python')
+makedepends=('cmake' 'python')
 source=('git+https://github.com/ostrich/plasma-share-uploader.git')
 sha256sums=('SKIP')
 
@@ -18,11 +18,7 @@ pkgver() {
 build() {
   cmake -S "$srcdir/plasma-share-uploader" -B "$srcdir/build" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX=/usr \
-    -DCMAKE_DISABLE_FIND_PACKAGE_Threads=OFF \
-    -DCMAKE_HAVE_LIBC_PTHREAD=1 \
-    -DCMAKE_USE_PTHREADS_INIT=1 \
-    -DCMAKE_THREAD_LIBS_INIT="-lpthread"
+    -DCMAKE_INSTALL_PREFIX=/usr
   cmake --build "$srcdir/build"
 }
 
