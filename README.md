@@ -2,6 +2,8 @@
 
 Purpose share plugin for KDE Plasma 6 that uploads files using a data-driven target list.
 
+![Screenshot](docs/screenshot.png)
+
 ## License
 
 GPL-3.0-or-later. See `LICENSE`.
