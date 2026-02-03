@@ -1,6 +1,6 @@
 # plasma-share-uploader
 
-Add custom upload targets to the KDE Plasma 6 share menu.
+Create custom upload targets for the KDE Plasma 6 Share menu.
 
 ![Screenshot](docs/screenshot.png)
 
