@@ -1,6 +1,6 @@
 # plasma-share-uploader
 
-Purpose share plugin for KDE Plasma 6 that uploads files using a data-driven target list.
+Add custom targets to the KDE Plasma share menu.
 
 ![Screenshot](docs/screenshot.png)
 
