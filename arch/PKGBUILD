@@ -1,7 +1,7 @@
 pkgname=plasma-share-uploader-git
 pkgver=0.1.0
 pkgrel=1
-pkgdesc='KDE Purpose share plugins with data-driven upload targets'
+pkgdesc='Add custom upload targets to the KDE Plasma 6 share menu'
 arch=('x86_64')
 url='https://github.com/ostrich/plasma-share-uploader'
 license=('GPL3')
