@@ -61,8 +61,18 @@ def validate_target(target: dict) -> None:
         raise ValueError(f"Target {target_id!r} request.url must be a non-empty string")
     if not isinstance(request_type, str) or request_type not in {"multipart", "raw"}:
         raise ValueError(f"Target {target_id!r} request.type must be multipart or raw")
-    if not isinstance(method, str):
-        raise ValueError(f"Target {target_id!r} request.method must be a string")
+    if not isinstance(method, str) or not method:
+        raise ValueError(f"Target {target_id!r} request.method must be a non-empty string")
+
+    headers = request.get("headers")
+    if headers is not None and not isinstance(headers, dict):
+        raise ValueError(f"Target {target_id!r} request.headers must be an object")
+    if isinstance(headers, dict):
+        for name, value in headers.items():
+            if not isinstance(name, str) or not name:
+                raise ValueError(f"Target {target_id!r} request.headers keys must be non-empty strings")
+            if not isinstance(value, str):
+                raise ValueError(f"Target {target_id!r} request.headers values must be strings")
 
     if request_type == "multipart":
         if method.upper() != "POST":
@@ -78,6 +88,13 @@ def validate_target(target: dict) -> None:
         fields = multipart.get("fields", {})
         if not isinstance(fields, dict):
             raise ValueError(f"Target {target_id!r} request.multipart.fields must be an object")
+        for name, value in fields.items():
+            if not isinstance(name, str) or not name:
+                raise ValueError(
+                    f"Target {target_id!r} request.multipart.fields keys must be non-empty strings"
+                )
+            if not isinstance(value, str):
+                raise ValueError(f"Target {target_id!r} request.multipart.fields values must be strings")
     else:
         if method.upper() not in {"POST", "PUT"}:
             raise ValueError(f"Target {target_id!r} request.method must be POST or PUT for raw")
@@ -102,6 +119,8 @@ def validate_target(target: dict) -> None:
         pointer = response.get("pointer")
         if not isinstance(pointer, str) or not pointer:
             raise ValueError(f"Target {target_id!r} response.pointer must be a non-empty string")
+        if not pointer.startswith("/"):
+            raise ValueError(f"Target {target_id!r} response.pointer must start with '/'")
 
     plugin_types = target.get("pluginTypes", ["ShareUrl"])
     if plugin_types is not None and not isinstance(plugin_types, list):
