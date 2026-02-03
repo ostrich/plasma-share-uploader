@@ -62,7 +62,7 @@ Optional fields:
 Multipart uploads:
 - `request.type`: `multipart` (or omitted).
 - `request.multipart.fileField`: form field name for the file.
-- `request.multipart.fields`: optional extra form fields.
+- `request.multipart.fields`: optional extra form fields (string values only).
 
 Raw uploads:
 - `request.type`: `raw`.
@@ -70,14 +70,14 @@ Raw uploads:
 - `request.contentType`: optional Content-Type to set for the file body.
 
 Headers:
-- `request.headers`: object of header name -> value, values support `${ENV:VARNAME}` substitution.
+- `request.headers`: object of header name -> value (string values only), values support `${ENV:VARNAME}` substitution.
 
 ### Response formats
 
 `response` must include a `type`:
 - `text_url`: response body is the URL.
 - `regex`: use `pattern` and optional `group` to extract URL from response text.
-- `json_pointer`: use `pointer` to locate a string URL in a JSON response.
+- `json_pointer`: use `pointer` (must start with `/`) to locate a string URL in a JSON response.
 
 ### Example
 
