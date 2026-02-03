@@ -30,14 +30,6 @@ Targets live in `targets.json`. Each entry generates its own Share plugin at con
 After editing `targets.json`, re-run the configure step (`cmake -S . -B build`) so plugins are regenerated.
 Example targets are stored in `targets.sample.json` for reference when adding new services.
 
-Supported response parsers:
-- `text_url`: expects the response body to be the URL.
-- `regex`: extract the URL with a regex `pattern` and optional `group`.
-- `json_pointer`: extract the URL using a JSON Pointer string in `pointer`, e.g. `/files/0/url`.
-
-Request headers can be supplied in `request.headers`. Values support `${ENV:VARNAME}` substitution
-at runtime (useful for API keys such as Imgur's Client-ID).
-
 ### Adding a new target
 
 Each target entry is an object inside the `targets` array. Required fields:
