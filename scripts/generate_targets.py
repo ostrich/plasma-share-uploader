@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate Purpose share plugin sources and metadata from targets.json.
+"""Generate plugin sources and metadata from targets.json.
 
 Each target entry emits a plugin JSON file plus a C++ wrapper, and writes
 targets.cmake with the generated target IDs for the CMake build.
