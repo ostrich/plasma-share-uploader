@@ -28,7 +28,7 @@ Restart Dolphin/Gwenview/other Purpose-Share-enabled app after installing so the
 
 Targets live in `targets.json`. Each entry generates its own Share plugin at configure time.
 After editing `targets.json`, re-run the configure step (`cmake -S . -B build`) so plugins are regenerated.
-Additional example targets are stored in `targets.sample.json` for reference when adding new services.
+Additional example targets are available in `targets.sample.json` for reference when adding new services.
 
 ### Adding a new target
 
