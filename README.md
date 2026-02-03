@@ -46,10 +46,10 @@ Optional fields:
 
 ### Request formats
 
-`request` must include:
+`request` includes:
 - `url`: upload endpoint URL. Supports `${ENV:VAR}` substitution.
 - `method`: HTTP method. `POST` for multipart; `POST` or `PUT` for raw uploads.
-- `type`: `multipart` (default) or `raw`.
+- `type` (optional): `multipart` (default) or `raw`.
 
 Multipart uploads:
 - `request.type`: `multipart` (or omitted).
