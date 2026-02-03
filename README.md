@@ -22,11 +22,11 @@ cmake --install build
 ```
 
 Plugins install to the Purpose plugin directory (`${KDE_INSTALL_QTPLUGINDIR}/kf6/purpose`).
-Restart Dolphin/Gwenview/other Purpose-share-enabled app after installing so the new share action shows up.
+Restart Dolphin/Gwenview/other Purpose-Share-enabled app after installing so the new Share action shows up.
 
 ## Targets
 
-Targets live in `targets.json`. Each entry generates its own share plugin at configure time.
+Targets live in `targets.json`. Each entry generates its own Share plugin at configure time.
 After editing `targets.json`, re-run the configure step (`cmake -S . -B build`) so plugins are regenerated.
 Example targets are stored in `targets.sample.json` for reference when adding new services.
 
@@ -42,7 +42,7 @@ at runtime (useful for API keys such as Imgur's Client-ID).
 
 Each target entry is an object inside the `targets` array. Required fields:
 - `id`: lowercase identifier used for plugin names; `[a-z0-9][a-z0-9_-]*`.
-- `displayName`: human-friendly name shown in share menus.
+- `displayName`: human-friendly name shown in Share menus.
 - `description`: short description for plugin metadata.
 - `icon`: icon name (e.g. `image-x-generic`).
 - `request`: upload configuration (see below).
