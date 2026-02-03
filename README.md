@@ -6,7 +6,7 @@ Create custom upload targets for the KDE Plasma 6 Share menu. New targets are us
 
 ## License
 
-GPL-3.0-or-later. See `LICENSE`.
+GPL-3.0-or-later.
 
 ## Build
 
