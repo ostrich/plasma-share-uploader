@@ -1,6 +1,6 @@
 # plasma-share-uploader
 
-Create custom upload targets for the KDE Plasma 6 Share menu. [Catbox](https://catbox.moe/) and [Uguu](https://uguu.se/) included by default.
+Create custom upload targets for the KDE Plasma 6 Share menu. New targets are user-definable in JSON; no code modification required. [Catbox](https://catbox.moe/) and [Uguu](https://uguu.se/) included by default.
 
 ![Screenshot](docs/screenshot.png)
 
