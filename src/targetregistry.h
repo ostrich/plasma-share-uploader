@@ -1,17 +1,17 @@
 #pragma once
 
+#include "targetdiagnostic.h"
 #include "targetdefinition.h"
 
 #include <QList>
 #include <QString>
-#include <QStringList>
 
 class TargetRegistry
 {
 public:
     struct LoadResult {
         QList<TargetDefinition> targets;
-        QStringList errors;
+        QList<TargetDiagnostic> diagnostics;
     };
 
     explicit TargetRegistry(QString systemPath = {}, QString userPath = {});

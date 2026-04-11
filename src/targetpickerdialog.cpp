@@ -11,7 +11,7 @@
 #include <QWidget>
 
 TargetPickerDialog::TargetPickerDialog(const QList<TargetDefinition> &targets,
-                                       const QStringList &loadErrors,
+                                       const QList<TargetDiagnostic> &diagnostics,
                                        const QString &systemTargetsPath,
                                        const QString &userTargetsPath,
                                        QWidget *parent)
@@ -48,10 +48,16 @@ TargetPickerDialog::TargetPickerDialog(const QList<TargetDefinition> &targets,
     layout->addWidget(scrollArea);
 
     auto *buttonLayout = new QHBoxLayout();
-    if (!loadErrors.isEmpty()) {
-        const int errorCount = loadErrors.size();
-        const QString details = QStringLiteral("System targets: %1\nUser targets: %2\n\n%3")
-                                    .arg(systemTargetsPath, userTargetsPath, loadErrors.join(QLatin1Char('\n')));
+    if (!diagnostics.isEmpty()) {
+        const int errorCount = diagnostics.size();
+        Q_UNUSED(systemTargetsPath)
+        Q_UNUSED(userTargetsPath)
+        QStringList detailLines;
+        detailLines.reserve(diagnostics.size());
+        for (const TargetDiagnostic &diagnostic : diagnostics) {
+            detailLines.append(diagnostic.displayText());
+        }
+        const QString details = detailLines.join(QLatin1Char('\n'));
         auto *errorButton = new QPushButton(
             QIcon::fromTheme(QStringLiteral("dialog-error")),
             errorCount == 1 ? QStringLiteral("1 error") : QStringLiteral("%1 errors").arg(errorCount),
@@ -64,8 +70,7 @@ TargetPickerDialog::TargetPickerDialog(const QList<TargetDefinition> &targets,
             messageBox.setText(errorCount == 1
                                    ? QStringLiteral("One target could not be loaded.")
                                    : QStringLiteral("%1 targets could not be loaded.").arg(errorCount));
-            messageBox.setInformativeText(QStringLiteral("Fix the invalid target files or remove them."));
-            messageBox.setDetailedText(details);
+            messageBox.setInformativeText(details);
             messageBox.exec();
         });
         buttonLayout->addWidget(errorButton);

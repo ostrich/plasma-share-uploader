@@ -1,8 +1,10 @@
 #pragma once
 
+#include "targetdiagnostic.h"
+
 #include <QJsonObject>
-#include <QStringList>
+#include <QList>
 
 namespace TargetConfigValidator {
-bool validateTarget(const QJsonObject &target, QStringList *errors = nullptr);
+bool validateTarget(const QJsonObject &target, QList<TargetDiagnostic> *diagnostics = nullptr);
 }

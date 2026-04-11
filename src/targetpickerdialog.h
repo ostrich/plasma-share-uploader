@@ -1,5 +1,6 @@
 #pragma once
 
+#include "targetdiagnostic.h"
 #include "targetdefinition.h"
 
 #include <QDialog>
@@ -9,7 +10,7 @@ class TargetPickerDialog final : public QDialog
     Q_OBJECT
 public:
     explicit TargetPickerDialog(const QList<TargetDefinition> &targets,
-                                const QStringList &loadErrors = {},
+                                const QList<TargetDiagnostic> &diagnostics = {},
                                 const QString &systemTargetsPath = {},
                                 const QString &userTargetsPath = {},
                                 QWidget *parent = nullptr);

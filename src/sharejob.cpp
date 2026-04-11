@@ -16,6 +16,18 @@
 #include <QNetworkRequest>
 #include <QNetworkReply>
 
+namespace {
+QString diagnosticsText(const QList<TargetDiagnostic> &diagnostics)
+{
+    QStringList lines;
+    lines.reserve(diagnostics.size());
+    for (const TargetDiagnostic &diagnostic : diagnostics) {
+        lines.append(diagnostic.displayText());
+    }
+    return lines.join(QLatin1Char('\n'));
+}
+}
+
 ShareJob::ShareJob(const QByteArray &configJson, QObject *parent)
     : Purpose::Job(parent)
     , m_targetConfig(QJsonDocument::fromJson(configJson).object())
@@ -171,16 +183,16 @@ bool ShareJob::ensureTargetSelected()
         QString message = QStringLiteral("No compatible upload targets available.");
         message.append(QStringLiteral("\n\nSystem targets: %1").arg(systemTargetsPath));
         message.append(QStringLiteral("\nUser targets: %1").arg(userTargetsPath));
-        if (!loadResult.errors.isEmpty()) {
+        if (!loadResult.diagnostics.isEmpty()) {
             message.append(QStringLiteral("\n\n"));
-            message.append(loadResult.errors.join(QLatin1Char('\n')));
+            message.append(diagnosticsText(loadResult.diagnostics));
         }
         finishError(message);
         return false;
     }
 
     QWidget *parentWidget = QApplication::activeWindow();
-    TargetPickerDialog dialog(compatibleTargets, loadResult.errors, systemTargetsPath, userTargetsPath, parentWidget);
+    TargetPickerDialog dialog(compatibleTargets, loadResult.diagnostics, systemTargetsPath, userTargetsPath, parentWidget);
     if (dialog.exec() != QDialog::Accepted) {
         finishError(QStringLiteral("Upload cancelled."));
         return false;

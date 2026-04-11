@@ -21,25 +21,35 @@ QString defaultUserTargetsPath()
         + QStringLiteral("/plasma-share-uploader/targets.d");
 }
 
-void loadTargetFile(const QString &path, QMap<QString, TargetDefinition> &targets, QStringList &errors)
+void appendRegistryDiagnostic(QList<TargetDiagnostic> &diagnostics,
+                              const QString &filePath,
+                              const QString &jsonPath,
+                              const QString &code,
+                              const QString &message)
+{
+    diagnostics.append(TargetDiagnostic{TargetDiagnosticSeverity::Error, filePath, jsonPath, code, message});
+}
+
+void loadTargetFile(const QString &path, QMap<QString, TargetDefinition> &targets, QList<TargetDiagnostic> &diagnostics)
 {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
-        errors.append(QStringLiteral("Failed to open target file: %1").arg(path));
+        appendRegistryDiagnostic(diagnostics, path, {}, QStringLiteral("file.open_failed"), QStringLiteral("Failed to open target file"));
         return;
     }
 
     const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
     if (!doc.isObject() || doc.object().isEmpty()) {
-        errors.append(QStringLiteral("Target file is not a JSON object: %1").arg(path));
+        appendRegistryDiagnostic(diagnostics, path, {}, QStringLiteral("file.invalid_json_object"), QStringLiteral("Target file is not a JSON object"));
         return;
     }
 
     const QJsonObject targetObject = doc.object();
-    QStringList validationErrors;
-    if (!TargetConfigValidator::validateTarget(targetObject, &validationErrors)) {
-        for (const QString &message : std::as_const(validationErrors)) {
-            errors.append(QStringLiteral("%1 (%2)").arg(message, path));
+    QList<TargetDiagnostic> fileDiagnostics;
+    if (!TargetConfigValidator::validateTarget(targetObject, &fileDiagnostics)) {
+        for (TargetDiagnostic &diagnostic : fileDiagnostics) {
+            diagnostic.filePath = path;
+            diagnostics.append(diagnostic);
         }
         return;
     }
@@ -49,19 +59,19 @@ void loadTargetFile(const QString &path, QMap<QString, TargetDefinition> &target
     targets.insert(definition.id(), definition);
 }
 
-void loadTargetsFromDirectory(const QString &path, bool required, QMap<QString, TargetDefinition> &targets, QStringList &errors)
+void loadTargetsFromDirectory(const QString &path, bool required, QMap<QString, TargetDefinition> &targets, QList<TargetDiagnostic> &diagnostics)
 {
     const QDir dir(path);
     if (!dir.exists()) {
         if (required) {
-            errors.append(QStringLiteral("Missing targets directory: %1").arg(path));
+            appendRegistryDiagnostic(diagnostics, path, {}, QStringLiteral("directory.missing"), QStringLiteral("Missing targets directory"));
         }
         return;
     }
 
     const QStringList fileNames = dir.entryList(QStringList{QStringLiteral("*.json")}, QDir::Files, QDir::Name);
     for (const QString &fileName : fileNames) {
-        loadTargetFile(dir.filePath(fileName), targets, errors);
+        loadTargetFile(dir.filePath(fileName), targets, diagnostics);
     }
 }
 }
@@ -77,8 +87,8 @@ TargetRegistry::LoadResult TargetRegistry::loadTargets() const
     LoadResult result;
     QMap<QString, TargetDefinition> mergedTargets;
 
-    loadTargetsFromDirectory(systemTargetsPath(), true, mergedTargets, result.errors);
-    loadTargetsFromDirectory(userTargetsPath(), false, mergedTargets, result.errors);
+    loadTargetsFromDirectory(systemTargetsPath(), true, mergedTargets, result.diagnostics);
+    loadTargetsFromDirectory(userTargetsPath(), false, mergedTargets, result.diagnostics);
 
     result.targets = mergedTargets.values();
     return result;
