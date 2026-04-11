@@ -198,13 +198,8 @@ QString TargetUploaderUtils::resolveXmlPath(const QByteArray &xmlBytes, const QS
     }
 
     QDomDocument xml;
-    QString errorMessage;
-    int errorLine = 0;
-    int errorColumn = 0;
-    if (!xml.setContent(xmlBytes, &errorMessage, &errorLine, &errorColumn)) {
-        Q_UNUSED(errorMessage)
-        Q_UNUSED(errorLine)
-        Q_UNUSED(errorColumn)
+    const QDomDocument::ParseResult parseResult = xml.setContent(xmlBytes);
+    if (!parseResult) {
         return {};
     }
 
