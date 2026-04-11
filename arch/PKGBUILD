@@ -20,7 +20,8 @@ pkgver() {
 build() {
   cmake -S "$srcdir/plasma-share-uploader" -B "$srcdir/build" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX=/usr
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DBUILD_TESTING=OFF
   cmake --build "$srcdir/build"
 }
 
