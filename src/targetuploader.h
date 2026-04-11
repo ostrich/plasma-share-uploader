@@ -2,6 +2,7 @@
 
 #include "targetcoreconfigparser.h"
 #include "targetrequestconfigparser.h"
+#include "targetresponseconfigparser.h"
 
 #include <QJsonObject>
 #include <QNetworkAccessManager>
@@ -45,5 +46,7 @@ private:
     QJsonObject m_config;
     ParsedTargetCoreConfig m_coreConfig;
     ParsedRequestConfig m_requestConfig;
+    ParsedResponseConfig m_responseConfig;
     bool m_requestConfigValid = false;
+    bool m_responseConfigValid = false;
 };

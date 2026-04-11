@@ -16,6 +16,7 @@ set(IMSHARE_CORE_SOURCES
     ${PROJECT_SOURCE_DIR}/src/sharejob.cpp
     ${PROJECT_SOURCE_DIR}/src/targetuploader.cpp
     ${PROJECT_SOURCE_DIR}/src/targetrequestconfigparser.cpp
+    ${PROJECT_SOURCE_DIR}/src/targetresponseconfigparser.cpp
     ${PROJECT_SOURCE_DIR}/src/targetuploader_utils.cpp
 )
 
@@ -76,6 +77,7 @@ imshare_add_cpp_test(imshare_targetuploader_tests
     ${PROJECT_SOURCE_DIR}/src/preuploadprocessor.cpp
     ${PROJECT_SOURCE_DIR}/src/targetcoreconfigparser.cpp
     ${PROJECT_SOURCE_DIR}/src/targetrequestconfigparser.cpp
+    ${PROJECT_SOURCE_DIR}/src/targetresponseconfigparser.cpp
     ${PROJECT_SOURCE_DIR}/src/targetuploader.cpp
     ${PROJECT_SOURCE_DIR}/src/targetuploader_utils.cpp
 )
@@ -85,6 +87,7 @@ imshare_add_cpp_test(imshare_targetregistry_tests
     ${PROJECT_SOURCE_DIR}/src/constraintmatcher.cpp
     ${PROJECT_SOURCE_DIR}/src/targetcoreconfigparser.cpp
     ${PROJECT_SOURCE_DIR}/src/targetrequestconfigparser.cpp
+    ${PROJECT_SOURCE_DIR}/src/targetresponseconfigparser.cpp
     ${PROJECT_SOURCE_DIR}/src/targetconfigvalidator.cpp
     ${PROJECT_SOURCE_DIR}/src/targetdefinition.cpp
     ${PROJECT_SOURCE_DIR}/src/targetregistry.cpp
@@ -98,6 +101,7 @@ imshare_add_cpp_test(imshare_sharejob_tests
     ${PROJECT_SOURCE_DIR}/src/preuploadprocessor.cpp
     ${PROJECT_SOURCE_DIR}/src/targetcoreconfigparser.cpp
     ${PROJECT_SOURCE_DIR}/src/targetrequestconfigparser.cpp
+    ${PROJECT_SOURCE_DIR}/src/targetresponseconfigparser.cpp
     ${PROJECT_SOURCE_DIR}/src/targetconfigvalidator.cpp
     ${PROJECT_SOURCE_DIR}/src/targetdefinition.cpp
     ${PROJECT_SOURCE_DIR}/src/targetpickerdialog.cpp

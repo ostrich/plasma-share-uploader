@@ -2,6 +2,7 @@
 
 #include "targetcoreconfigparser.h"
 #include "targetrequestconfigparser.h"
+#include "targetresponseconfigparser.h"
 
 #include <QJsonArray>
 #include <QRegularExpression>
@@ -152,91 +153,6 @@ bool validateJsonValuePlaceholders(const QString &targetId,
     }
 
     return true;
-}
-
-bool validateResponseExtractor(const QString &targetId,
-                               const QJsonObject &response,
-                               const QString &path,
-                               const QString &jsonPath,
-                               QList<TargetDiagnostic> *diagnostics)
-{
-    if (response.isEmpty()) {
-        return appendDiagnostic(diagnostics,
-                                jsonPath,
-                                QStringLiteral("%1.type").arg(path),
-                                QStringLiteral("Target '%1' %2 must be an object").arg(targetId, path));
-    }
-
-    const QString responseType = stringValue(response, "type");
-    bool ok = true;
-    if (responseType != QLatin1StringView("text_url")
-        && responseType != QLatin1StringView("regex")
-        && responseType != QLatin1StringView("json_pointer")
-        && responseType != QLatin1StringView("header")
-        && responseType != QLatin1StringView("redirect_url")
-        && responseType != QLatin1StringView("xml_xpath")) {
-        return appendDiagnostic(diagnostics,
-                                QStringLiteral("%1/type").arg(jsonPath),
-                                QStringLiteral("%1.type.invalid").arg(path),
-                                QStringLiteral("Target '%1' %2.type must be text_url, regex, json_pointer, header, redirect_url, or xml_xpath")
-                                    .arg(targetId, path));
-    }
-
-    if (responseType == QLatin1StringView("regex")) {
-        if (stringValue(response, "pattern").isEmpty()) {
-            ok = appendDiagnostic(diagnostics,
-                                  QStringLiteral("%1/pattern").arg(jsonPath),
-                                  QStringLiteral("%1.pattern.empty").arg(path),
-                                  QStringLiteral("Target '%1' %2.pattern must be a non-empty string").arg(targetId, path));
-        }
-        if (!response.value(QStringLiteral("group")).isUndefined() && response.value(QStringLiteral("group")).toInt(-1) < 0) {
-            ok = appendDiagnostic(diagnostics,
-                                  QStringLiteral("%1/group").arg(jsonPath),
-                                  QStringLiteral("%1.group.invalid").arg(path),
-                                  QStringLiteral("Target '%1' %2.group must be a non-negative integer").arg(targetId, path));
-        }
-    }
-
-    if (responseType == QLatin1StringView("json_pointer")) {
-        const QString pointer = stringValue(response, "pointer");
-        if (pointer.isEmpty()) {
-            ok = appendDiagnostic(diagnostics,
-                                  QStringLiteral("%1/pointer").arg(jsonPath),
-                                  QStringLiteral("%1.pointer.empty").arg(path),
-                                  QStringLiteral("Target '%1' %2.pointer must be a non-empty string").arg(targetId, path));
-        }
-        if (!pointer.isEmpty() && !pointer.startsWith(QLatin1Char('/'))) {
-            ok = appendDiagnostic(diagnostics,
-                                  QStringLiteral("%1/pointer").arg(jsonPath),
-                                  QStringLiteral("%1.pointer.invalid").arg(path),
-                                  QStringLiteral("Target '%1' %2.pointer must start with '/'").arg(targetId, path));
-        }
-    }
-
-    if (responseType == QLatin1StringView("header") && stringValue(response, "name").isEmpty()) {
-        ok = appendDiagnostic(diagnostics,
-                              QStringLiteral("%1/name").arg(jsonPath),
-                              QStringLiteral("%1.name.empty").arg(path),
-                              QStringLiteral("Target '%1' %2.name must be a non-empty string").arg(targetId, path));
-    }
-
-    if (responseType == QLatin1StringView("xml_xpath")) {
-        const QString xpath = stringValue(response, "xpath");
-        if (xpath.isEmpty()) {
-            ok = appendDiagnostic(diagnostics,
-                                  QStringLiteral("%1/xpath").arg(jsonPath),
-                                  QStringLiteral("%1.xpath.empty").arg(path),
-                                  QStringLiteral("Target '%1' %2.xpath must be a non-empty string").arg(targetId, path));
-        }
-        if (!xpath.isEmpty() && !xpath.startsWith(QLatin1Char('/'))) {
-            ok = appendDiagnostic(diagnostics,
-                                  QStringLiteral("%1/xpath").arg(jsonPath),
-                                  QStringLiteral("%1.xpath.invalid").arg(path),
-                                  QStringLiteral("Target '%1' %2.xpath must start with '/'").arg(targetId, path));
-        }
-    }
-
-    return ok;
 }
 
 bool validateRequest(const QString &targetId, const QJsonObject &request, QList<TargetDiagnostic> *diagnostics)
@@ -544,60 +460,6 @@ bool validatePreUpload(const QString &targetId, const QJsonValue &value, QList<T
     return ok;
 }
 
-bool validateResponse(const QString &targetId, const QJsonObject &response, QList<TargetDiagnostic> *diagnostics)
-{
-    bool ok = validateResponseExtractor(targetId, response, QStringLiteral("response"), QStringLiteral("/response"), diagnostics);
-
-    const QJsonValue errorValue = response.value(QStringLiteral("error"));
-    if (!errorValue.isUndefined() && !errorValue.isObject()) {
-        ok = appendDiagnostic(diagnostics,
-                              QStringLiteral("/response/error"),
-                              QStringLiteral("response.error.type"),
-                              QStringLiteral("Target '%1' response.error must be an object").arg(targetId));
-    }
-    if (errorValue.isObject()) {
-        ok = validateResponseExtractor(targetId,
-                                       errorValue.toObject(),
-                                       QStringLiteral("response.error"),
-                                       QStringLiteral("/response/error"),
-                                       diagnostics)
-            && ok;
-    }
-
-    const QJsonValue thumbnailValue = response.value(QStringLiteral("thumbnail"));
-    if (!thumbnailValue.isUndefined() && !thumbnailValue.isObject()) {
-        ok = appendDiagnostic(diagnostics,
-                              QStringLiteral("/response/thumbnail"),
-                              QStringLiteral("response.thumbnail.type"),
-                              QStringLiteral("Target '%1' response.thumbnail must be an object").arg(targetId));
-    }
-    if (thumbnailValue.isObject()) {
-        ok = validateResponseExtractor(targetId,
-                                       thumbnailValue.toObject(),
-                                       QStringLiteral("response.thumbnail"),
-                                       QStringLiteral("/response/thumbnail"),
-                                       diagnostics)
-            && ok;
-    }
-
-    const QJsonValue deletionValue = response.value(QStringLiteral("deletion"));
-    if (!deletionValue.isUndefined() && !deletionValue.isObject()) {
-        ok = appendDiagnostic(diagnostics,
-                              QStringLiteral("/response/deletion"),
-                              QStringLiteral("response.deletion.type"),
-                              QStringLiteral("Target '%1' response.deletion must be an object").arg(targetId));
-    }
-    if (deletionValue.isObject()) {
-        ok = validateResponseExtractor(targetId,
-                                       deletionValue.toObject(),
-                                       QStringLiteral("response.deletion"),
-                                       QStringLiteral("/response/deletion"),
-                                       diagnostics)
-            && ok;
-    }
-
-    return ok;
-}
 }
 
 bool TargetConfigValidator::validateTarget(const QJsonObject &target, QList<TargetDiagnostic> *diagnostics)
@@ -611,8 +473,9 @@ bool TargetConfigValidator::validateTarget(const QJsonObject &target, QList<Targ
     const QString targetId = core.id;
     bool ok = coreOk;
     ParsedRequestConfig request;
+    ParsedResponseConfig response;
     ok = TargetRequestConfigParser::parse(target, &request, diagnostics) && ok;
+    ok = TargetResponseConfigParser::parse(target, &response, diagnostics) && ok;
     ok = validatePreUpload(targetId, target.value(QStringLiteral("preUpload")), diagnostics) && ok;
-    ok = validateResponse(targetId, objectValue(target, "response"), diagnostics) && ok;
     return ok;
 }
