@@ -1,4 +1,5 @@
 #include "constraintmatcher.h"
+#include "targetcoreconfigparser.h"
 #include "targetconfigvalidator.h"
 #include "targetdiagnostic.h"
 #include "targetregistry.h"
@@ -274,9 +275,11 @@ void TargetRegistryTest::constraintMatcherFiltersByMimeType()
     imageTarget.config = QJsonObject{
         {QStringLiteral("id"), QStringLiteral("images")},
         {QStringLiteral("constraints"), QJsonArray{QStringLiteral("mimeType:image/*")}}};
+    QVERIFY(TargetCoreConfigParser::parse(imageTarget.config, &imageTarget.core));
 
     TargetDefinition anyTarget;
     anyTarget.config = QJsonObject{{QStringLiteral("id"), QStringLiteral("any")}};
+    QVERIFY(TargetCoreConfigParser::parse(anyTarget.config, &anyTarget.core));
 
     QVERIFY(ConstraintMatcher::targetMatchesFiles(imageTarget, QStringList{imagePath}));
     QVERIFY(!ConstraintMatcher::targetMatchesFiles(imageTarget, QStringList{textPath}));
@@ -297,6 +300,7 @@ void TargetRegistryTest::constraintMatcherFiltersByExtension()
     imageTarget.config = QJsonObject{
         {QStringLiteral("id"), QStringLiteral("images")},
         {QStringLiteral("extensions"), QJsonArray{QStringLiteral("png"), QStringLiteral(".jpeg")}}};
+    QVERIFY(TargetCoreConfigParser::parse(imageTarget.config, &imageTarget.core));
 
     QVERIFY(ConstraintMatcher::targetMatchesFiles(imageTarget, QStringList{imagePath}));
     QVERIFY(!ConstraintMatcher::targetMatchesFiles(imageTarget, QStringList{textPath}));

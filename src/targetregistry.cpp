@@ -1,5 +1,6 @@
 #include "targetregistry.h"
 
+#include "targetcoreconfigparser.h"
 #include "targetconfigvalidator.h"
 
 #include <QDir>
@@ -56,6 +57,9 @@ void loadTargetFile(const QString &path, QMap<QString, TargetDefinition> &target
 
     TargetDefinition definition;
     definition.config = targetObject;
+    if (!TargetCoreConfigParser::parse(targetObject, &definition.core)) {
+        return;
+    }
     targets.insert(definition.id(), definition);
 }
 

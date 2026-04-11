@@ -1,11 +1,14 @@
 #pragma once
 
+#include "targetcoreconfigparser.h"
+
 #include <QJsonObject>
 #include <QString>
 #include <QStringList>
 
 struct TargetDefinition {
     QJsonObject config;
+    ParsedTargetCoreConfig core;
 
     QString id() const;
     QString displayName() const;
