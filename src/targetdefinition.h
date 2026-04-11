@@ -12,4 +12,5 @@ struct TargetDefinition {
     QString description() const;
     QString icon() const;
     QStringList constraints() const;
+    QStringList extensions() const;
 };

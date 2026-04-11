@@ -1,0 +1,32 @@
+{
+  "id": "chevereto",
+  "displayName": "Chevereto",
+  "description": "Upload images to a self-hosted Chevereto instance",
+  "icon": "image-x-generic",
+  "pluginTypes": ["ShareUrl", "Export"],
+  "constraints": ["mimeType:image/*"],
+  "extensions": ["jpg", "jpeg", "png", "gif", "webp"],
+  "request": {
+    "url": "https://example.invalid/api/1/upload",
+    "method": "POST",
+    "multipart": {
+      "fields": {
+        "key": "${ENV:CHEVERETO_API_KEY}",
+        "format": "json"
+      },
+      "fileField": "source"
+    }
+  },
+  "response": {
+    "type": "json_pointer",
+    "pointer": "/image/URL_Viewer",
+    "thumbnail": {
+      "type": "json_pointer",
+      "pointer": "/image/Thumb/URL"
+    },
+    "error": {
+      "type": "json_pointer",
+      "pointer": "/error/message"
+    }
+  }
+}

@@ -128,6 +128,12 @@ void HttpCaptureServer::finalizeRequest(QTcpSocket *socket, const QByteArray &he
     wireResponse.append("Content-Length: ");
     wireResponse.append(QByteArray::number(response.body.size()));
     wireResponse.append("\r\n");
+    for (auto it = response.headers.begin(); it != response.headers.end(); ++it) {
+        wireResponse.append(it.key());
+        wireResponse.append(": ");
+        wireResponse.append(it.value());
+        wireResponse.append("\r\n");
+    }
     wireResponse.append("Connection: close\r\n\r\n");
     wireResponse.append(response.body);
 

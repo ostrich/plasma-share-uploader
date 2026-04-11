@@ -4,6 +4,7 @@
 #include <QCoreApplication>
 #include <QJsonDocument>
 #include <QNetworkAccessManager>
+#include <QNetworkRequest>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QUrl>
@@ -19,8 +20,13 @@ class TargetUploaderTest final : public QObject
 private slots:
     void rawUploadSendsExpectedRequestAndParsesTextResponse();
     void multipartUploadSendsFieldsAndParsesJsonPointer();
+    void formUrlencodedUploadSendsFieldsAndParsesHeaderResponse();
+    void jsonUploadSendsStructuredBodyAndParsesXmlXPath();
     void rawUploadUsesPreprocessedFileContents();
     void regexParserExtractsUrl();
+    void redirectUrlParserExtractsLocationHeader();
+    void errorExtractorSurfacesStructuredServerErrors();
+    void successExtractorsPopulateVariantUrlsAndResponseMetadata();
     void parserErrorsAreReported();
     void rejectsMissingFileAndNullManager();
     void idAndDisplayNameFallbacksWork();
@@ -43,7 +49,8 @@ UploadResult TargetUploaderTest::runUpload(TargetUploader &uploader, const QStri
         reply->deleteLater();
         return {};
     }
-    if (reply->error() != QNetworkReply::NoError) {
+    if (reply->error() != QNetworkReply::NoError
+        && !reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).isValid()) {
         const QByteArray error = reply->errorString().toUtf8();
         QTest::qFail(error.constData(), __FILE__, __LINE__);
         reply->deleteLater();
@@ -59,7 +66,7 @@ void TargetUploaderTest::rawUploadSendsExpectedRequestAndParsesTextResponse()
 {
     HttpCaptureServer server;
     QVERIFY(server.start());
-    server.enqueueResponse({200, "OK", "text/plain", "https://files.example/raw"});
+    server.enqueueResponse({200, "OK", "text/plain", {}, "https://files.example/raw"});
 
     qputenv("IMSHARE_UPLOAD_TOKEN", "secret");
     QTemporaryDir dir;
@@ -97,7 +104,7 @@ void TargetUploaderTest::multipartUploadSendsFieldsAndParsesJsonPointer()
 {
     HttpCaptureServer server;
     QVERIFY(server.start());
-    server.enqueueResponse({200, "OK", "application/json", R"({"data":{"url":"https://files.example/json"}})"});
+    server.enqueueResponse({200, "OK", "application/json", {}, R"({"data":{"url":"https://files.example/json"}})"});
 
     QTemporaryDir dir;
     const QString filePath = writeTempFile(dir, QStringLiteral("image.png"), tinyPng());
@@ -133,13 +140,103 @@ void TargetUploaderTest::multipartUploadSendsFieldsAndParsesJsonPointer()
     QVERIFY(request.body.contains(tinyPng()));
 }
 
+void TargetUploaderTest::formUrlencodedUploadSendsFieldsAndParsesHeaderResponse()
+{
+    HttpCaptureServer server;
+    QVERIFY(server.start());
+    server.enqueueResponse({200, "OK", "text/plain", {{"Location", "https://files.example/from-header"}}, "done"});
+
+    QTemporaryDir dir;
+    const QString filePath = writeTempFile(dir, QStringLiteral("note name.txt"), "body");
+    const QJsonObject formFields{
+        {QStringLiteral("title"), QStringLiteral("${FILENAME}")},
+        {QStringLiteral("kind"), QStringLiteral("note")}};
+    const QJsonObject config{
+        {QStringLiteral("id"), QStringLiteral("form")},
+        {QStringLiteral("request"),
+         QJsonObject{
+             {QStringLiteral("url"), server.url(QStringLiteral("/submit")).toString()},
+             {QStringLiteral("method"), QStringLiteral("POST")},
+             {QStringLiteral("query"), QJsonObject{{QStringLiteral("source"), QStringLiteral("${FILENAME}")}}},
+             {QStringLiteral("type"), QStringLiteral("form_urlencoded")},
+             {QStringLiteral("formUrlencoded"), QJsonObject{{QStringLiteral("fields"), formFields}}},
+         }},
+        {QStringLiteral("response"),
+         QJsonObject{{QStringLiteral("type"), QStringLiteral("header")}, {QStringLiteral("name"), QStringLiteral("Location")}}}};
+
+    TargetUploader uploader(config);
+    QNetworkAccessManager manager;
+    const UploadResult result = runUpload(uploader, filePath, manager);
+
+    QVERIFY(result.ok);
+    QCOMPARE(result.url, QStringLiteral("https://files.example/from-header"));
+    QCOMPARE(server.requests().size(), 1);
+    const CapturedHttpRequest request = server.requests().first();
+    QCOMPARE(request.method, QByteArray("POST"));
+    QCOMPARE(request.path, QByteArray("/submit?source=note%20name.txt"));
+    QCOMPARE(request.headers.value("content-type"), QByteArray("application/x-www-form-urlencoded"));
+    QVERIFY(request.body.contains("title=note+name.txt") || request.body.contains("title=note%20name.txt"));
+    QVERIFY(request.body.contains("kind=note"));
+}
+
+void TargetUploaderTest::jsonUploadSendsStructuredBodyAndParsesXmlXPath()
+{
+    HttpCaptureServer server;
+    QVERIFY(server.start());
+    server.enqueueResponse({200,
+                            "OK",
+                            "application/xml",
+                            {},
+                            R"(<?xml version="1.0"?><files><file><url>https://files.example/xml</url></file></files>)"});
+
+    QTemporaryDir dir;
+    const QString filePath = writeTempFile(dir, QStringLiteral("clip.txt"), "body");
+    const QJsonObject jsonFields{
+        {QStringLiteral("name"), QStringLiteral("${FILENAME}")},
+        {QStringLiteral("meta"),
+         QJsonObject{{QStringLiteral("tags"), QJsonArray{QStringLiteral("one"), QStringLiteral("${FILENAME}")}}}}};
+    const QJsonObject config{
+        {QStringLiteral("id"), QStringLiteral("json")},
+        {QStringLiteral("request"),
+         QJsonObject{
+             {QStringLiteral("url"), server.url(QStringLiteral("/json")).toString()},
+             {QStringLiteral("method"), QStringLiteral("POST")},
+             {QStringLiteral("type"), QStringLiteral("json")},
+             {QStringLiteral("json"), QJsonObject{{QStringLiteral("fields"), jsonFields}}},
+         }},
+        {QStringLiteral("response"),
+         QJsonObject{{QStringLiteral("type"), QStringLiteral("xml_xpath")},
+                     {QStringLiteral("xpath"), QStringLiteral("/files/file[1]/url")}}}};
+
+    TargetUploader uploader(config);
+    QNetworkAccessManager manager;
+    const UploadResult result = runUpload(uploader, filePath, manager);
+
+    QVERIFY(result.ok);
+    QCOMPARE(result.url, QStringLiteral("https://files.example/xml"));
+    QCOMPARE(server.requests().size(), 1);
+    const CapturedHttpRequest request = server.requests().first();
+    QCOMPARE(request.headers.value("content-type"), QByteArray("application/json"));
+    const QJsonDocument sentDoc = QJsonDocument::fromJson(request.body);
+    QVERIFY(sentDoc.isObject());
+    QCOMPARE(sentDoc.object().value(QStringLiteral("name")).toString(), QStringLiteral("clip.txt"));
+    QCOMPARE(sentDoc.object()
+                 .value(QStringLiteral("meta"))
+                 .toObject()
+                 .value(QStringLiteral("tags"))
+                 .toArray()
+                 .at(1)
+                 .toString(),
+             QStringLiteral("clip.txt"));
+}
+
 void TargetUploaderTest::rawUploadUsesPreprocessedFileContents()
 {
     QVERIFY2(!pythonExecutable().isEmpty(), "python3 is required for realistic preupload integration tests");
 
     HttpCaptureServer server;
     QVERIFY(server.start());
-    server.enqueueResponse({200, "OK", "text/plain", "https://files.example/processed"});
+    server.enqueueResponse({200, "OK", "text/plain", {}, "https://files.example/processed"});
 
     QTemporaryDir dir;
     const QString sourcePath = writeTempFile(dir, QStringLiteral("payload.txt"), "ORIGINAL");
@@ -190,7 +287,7 @@ void TargetUploaderTest::regexParserExtractsUrl()
 {
     HttpCaptureServer server;
     QVERIFY(server.start());
-    server.enqueueResponse({200, "OK", "text/plain", "Uploaded to https://files.example/regex"});
+    server.enqueueResponse({200, "OK", "text/plain", {}, "Uploaded to https://files.example/regex"});
 
     QTemporaryDir dir;
     const QString filePath = writeTempFile(dir, QStringLiteral("note.txt"), "regex");
@@ -215,6 +312,109 @@ void TargetUploaderTest::regexParserExtractsUrl()
     QCOMPARE(result.url, QStringLiteral("https://files.example/regex"));
 }
 
+void TargetUploaderTest::redirectUrlParserExtractsLocationHeader()
+{
+    HttpCaptureServer server;
+    QVERIFY(server.start());
+    server.enqueueResponse({302, "Found", "text/plain", {{"Location", "https://files.example/redirected"}}, ""});
+
+    QTemporaryDir dir;
+    const QString filePath = writeTempFile(dir, QStringLiteral("note.txt"), "body");
+    const QJsonObject config{
+        {QStringLiteral("id"), QStringLiteral("redirect")},
+        {QStringLiteral("request"),
+         QJsonObject{{QStringLiteral("url"), server.url(QStringLiteral("/redirect")).toString()},
+                     {QStringLiteral("method"), QStringLiteral("POST")},
+                     {QStringLiteral("type"), QStringLiteral("raw")}}},
+        {QStringLiteral("response"), QJsonObject{{QStringLiteral("type"), QStringLiteral("redirect_url")}}}};
+
+    TargetUploader uploader(config);
+    QNetworkAccessManager manager;
+    const UploadResult result = runUpload(uploader, filePath, manager);
+
+    QVERIFY(result.ok);
+    QCOMPARE(result.url, QStringLiteral("https://files.example/redirected"));
+}
+
+void TargetUploaderTest::errorExtractorSurfacesStructuredServerErrors()
+{
+    HttpCaptureServer server;
+    QVERIFY(server.start());
+    server.enqueueResponse({400,
+                            "Bad Request",
+                            "application/json",
+                            {},
+                            R"({"error":{"message":"upload denied"}})"});
+
+    QTemporaryDir dir;
+    const QString filePath = writeTempFile(dir, QStringLiteral("note.txt"), "body");
+    const QJsonObject config{
+        {QStringLiteral("id"), QStringLiteral("errorjson")},
+        {QStringLiteral("request"),
+         QJsonObject{{QStringLiteral("url"), server.url(QStringLiteral("/error")).toString()},
+                     {QStringLiteral("method"), QStringLiteral("POST")},
+                     {QStringLiteral("type"), QStringLiteral("raw")}}},
+        {QStringLiteral("response"),
+         QJsonObject{{QStringLiteral("type"), QStringLiteral("text_url")},
+                     {QStringLiteral("error"),
+                      QJsonObject{{QStringLiteral("type"), QStringLiteral("json_pointer")},
+                                  {QStringLiteral("pointer"), QStringLiteral("/error/message")}}}}}};
+
+    TargetUploader uploader(config);
+    QNetworkAccessManager manager;
+    const UploadResult result = runUpload(uploader, filePath, manager);
+
+    QVERIFY(!result.ok);
+    QCOMPARE(result.errorMessage, QStringLiteral("upload denied"));
+}
+
+void TargetUploaderTest::successExtractorsPopulateVariantUrlsAndResponseMetadata()
+{
+    HttpCaptureServer server;
+    QVERIFY(server.start());
+    server.enqueueResponse({200,
+                            "OK",
+                            "application/json",
+                            {{"X-Delete", "https://files.example/delete/123"}},
+                            R"({"data":{"url":"https://files.example/main","thumb":"https://files.example/thumb"}})"});
+
+    QTemporaryDir dir;
+    const QString filePath = writeTempFile(dir, QStringLiteral("note.txt"), "body");
+    const QJsonObject thumbnailResponse{
+        {QStringLiteral("type"), QStringLiteral("json_pointer")},
+        {QStringLiteral("pointer"), QStringLiteral("/data/thumb")}};
+    const QJsonObject deletionResponse{
+        {QStringLiteral("type"), QStringLiteral("header")},
+        {QStringLiteral("name"), QStringLiteral("X-Delete")}};
+    const QJsonObject response{
+        {QStringLiteral("type"), QStringLiteral("json_pointer")},
+        {QStringLiteral("pointer"), QStringLiteral("/data/url")},
+        {QStringLiteral("thumbnail"), thumbnailResponse},
+        {QStringLiteral("deletion"), deletionResponse}};
+    TargetUploader uploader(QJsonObject{
+        {QStringLiteral("id"), QStringLiteral("variants")},
+        {QStringLiteral("request"),
+         QJsonObject{{QStringLiteral("url"), server.url(QStringLiteral("/variants")).toString()},
+                     {QStringLiteral("method"), QStringLiteral("POST")},
+                     {QStringLiteral("type"), QStringLiteral("raw")}}},
+        {QStringLiteral("response"), response}});
+
+    QNetworkAccessManager manager;
+    const UploadResult result = runUpload(uploader, filePath, manager);
+
+    QVERIFY(result.ok);
+    QCOMPARE(result.url, QStringLiteral("https://files.example/main"));
+    QCOMPARE(result.thumbnailUrl, QStringLiteral("https://files.example/thumb"));
+    QCOMPARE(result.deletionUrl, QStringLiteral("https://files.example/delete/123"));
+    QCOMPARE(result.responseInfo.statusCode, 200);
+    QCOMPARE(result.responseInfo.reasonPhrase, QStringLiteral("OK"));
+    const QString expectedResponseText =
+        QString::fromUtf8("{\"data\":{\"url\":\"https://files.example/main\",\"thumb\":\"https://files.example/thumb\"}}");
+    QCOMPARE(result.responseInfo.responseText, expectedResponseText);
+    QCOMPARE(result.responseInfo.headers.value(QStringLiteral("x-delete")),
+             QStringLiteral("https://files.example/delete/123"));
+}
+
 void TargetUploaderTest::parserErrorsAreReported()
 {
     QTemporaryDir dir;
@@ -224,7 +424,7 @@ void TargetUploaderTest::parserErrorsAreReported()
     {
         HttpCaptureServer server;
         QVERIFY(server.start());
-        server.enqueueResponse({200, "OK", "text/plain", "not-a-url"});
+        server.enqueueResponse({200, "OK", "text/plain", {}, "not-a-url"});
         TargetUploader uploader(QJsonObject{
             {QStringLiteral("id"), QStringLiteral("badtext")},
             {QStringLiteral("request"),
@@ -240,7 +440,7 @@ void TargetUploaderTest::parserErrorsAreReported()
     {
         HttpCaptureServer server;
         QVERIFY(server.start());
-        server.enqueueResponse({200, "OK", "application/json", "not json"});
+        server.enqueueResponse({200, "OK", "application/json", {}, "not json"});
         TargetUploader uploader(QJsonObject{
             {QStringLiteral("id"), QStringLiteral("badjson")},
             {QStringLiteral("request"),
@@ -258,7 +458,7 @@ void TargetUploaderTest::parserErrorsAreReported()
     {
         HttpCaptureServer server;
         QVERIFY(server.start());
-        server.enqueueResponse({200, "OK", "application/json", R"({"data":{"url":42}})"});
+        server.enqueueResponse({200, "OK", "application/json", {}, R"({"data":{"url":42}})"});
         TargetUploader uploader(QJsonObject{
             {QStringLiteral("id"), QStringLiteral("missingurl")},
             {QStringLiteral("request"),
@@ -276,7 +476,7 @@ void TargetUploaderTest::parserErrorsAreReported()
     {
         HttpCaptureServer server;
         QVERIFY(server.start());
-        server.enqueueResponse({200, "OK", "text/plain", "no match here"});
+        server.enqueueResponse({200, "OK", "text/plain", {}, "no match here"});
         TargetUploader uploader(QJsonObject{
             {QStringLiteral("id"), QStringLiteral("nomatch")},
             {QStringLiteral("request"),
@@ -289,6 +489,24 @@ void TargetUploaderTest::parserErrorsAreReported()
         const UploadResult result = runUpload(uploader, filePath, manager);
         QVERIFY(!result.ok);
         QCOMPARE(result.errorMessage, QStringLiteral("no match here"));
+    }
+
+    {
+        HttpCaptureServer server;
+        QVERIFY(server.start());
+        server.enqueueResponse({200, "OK", "application/xml", {}, "<nope />"});
+        TargetUploader uploader(QJsonObject{
+            {QStringLiteral("id"), QStringLiteral("badxml")},
+            {QStringLiteral("request"),
+             QJsonObject{{QStringLiteral("url"), server.url(QStringLiteral("/badxml")).toString()},
+                         {QStringLiteral("method"), QStringLiteral("POST")},
+                         {QStringLiteral("type"), QStringLiteral("raw")}}},
+            {QStringLiteral("response"),
+             QJsonObject{{QStringLiteral("type"), QStringLiteral("xml_xpath")},
+                         {QStringLiteral("xpath"), QStringLiteral("/files/file[1]/url")}}}});
+        const UploadResult result = runUpload(uploader, filePath, manager);
+        QVERIFY(!result.ok);
+        QCOMPARE(result.errorMessage, QStringLiteral("<nope />"));
     }
 }
 

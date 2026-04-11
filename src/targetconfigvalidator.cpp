@@ -52,6 +52,96 @@ bool validateStringMap(const QString &targetId, const QJsonValue &value, const Q
     return true;
 }
 
+bool validateJsonValuePlaceholders(const QString &targetId, const QJsonValue &value, const QString &path, QStringList *errors)
+{
+    if (value.isString()) {
+        const auto matches = kPlaceholderPattern.globalMatch(value.toString());
+        auto it = matches;
+        while (it.hasNext()) {
+            const QString placeholder = it.next().captured(1);
+            if (placeholder != QLatin1StringView("FILENAME")) {
+                return appendError(errors, QStringLiteral("Target '%1' %2 contains unsupported placeholder ${%3}")
+                                               .arg(targetId, path, placeholder));
+            }
+        }
+        return true;
+    }
+
+    if (value.isArray()) {
+        const QJsonArray array = value.toArray();
+        for (int i = 0; i < array.size(); ++i) {
+            if (!validateJsonValuePlaceholders(targetId, array.at(i), QStringLiteral("%1[%2]").arg(path).arg(i), errors)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (value.isObject()) {
+        const QJsonObject object = value.toObject();
+        for (auto it = object.begin(); it != object.end(); ++it) {
+            if (!validateJsonValuePlaceholders(targetId, it.value(), QStringLiteral("%1.%2").arg(path, it.key()), errors)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool validateResponseExtractor(const QString &targetId, const QJsonObject &response, const QString &path, QStringList *errors)
+{
+    if (response.isEmpty()) {
+        return appendError(errors, QStringLiteral("Target '%1' %2 must be an object").arg(targetId, path));
+    }
+
+    const QString responseType = stringValue(response, "type");
+    if (responseType != QLatin1StringView("text_url")
+        && responseType != QLatin1StringView("regex")
+        && responseType != QLatin1StringView("json_pointer")
+        && responseType != QLatin1StringView("header")
+        && responseType != QLatin1StringView("redirect_url")
+        && responseType != QLatin1StringView("xml_xpath")) {
+        return appendError(errors,
+                           QStringLiteral("Target '%1' %2.type must be text_url, regex, json_pointer, header, redirect_url, or xml_xpath")
+                               .arg(targetId, path));
+    }
+
+    if (responseType == QLatin1StringView("regex")) {
+        if (stringValue(response, "pattern").isEmpty()) {
+            return appendError(errors, QStringLiteral("Target '%1' %2.pattern must be a non-empty string").arg(targetId, path));
+        }
+        if (!response.value(QStringLiteral("group")).isUndefined() && response.value(QStringLiteral("group")).toInt(-1) < 0) {
+            return appendError(errors, QStringLiteral("Target '%1' %2.group must be a non-negative integer").arg(targetId, path));
+        }
+    }
+
+    if (responseType == QLatin1StringView("json_pointer")) {
+        const QString pointer = stringValue(response, "pointer");
+        if (pointer.isEmpty()) {
+            return appendError(errors, QStringLiteral("Target '%1' %2.pointer must be a non-empty string").arg(targetId, path));
+        }
+        if (!pointer.startsWith(QLatin1Char('/'))) {
+            return appendError(errors, QStringLiteral("Target '%1' %2.pointer must start with '/'").arg(targetId, path));
+        }
+    }
+
+    if (responseType == QLatin1StringView("header") && stringValue(response, "name").isEmpty()) {
+        return appendError(errors, QStringLiteral("Target '%1' %2.name must be a non-empty string").arg(targetId, path));
+    }
+
+    if (responseType == QLatin1StringView("xml_xpath")) {
+        const QString xpath = stringValue(response, "xpath");
+        if (xpath.isEmpty()) {
+            return appendError(errors, QStringLiteral("Target '%1' %2.xpath must be a non-empty string").arg(targetId, path));
+        }
+        if (!xpath.startsWith(QLatin1Char('/'))) {
+            return appendError(errors, QStringLiteral("Target '%1' %2.xpath must start with '/'").arg(targetId, path));
+        }
+    }
+
+    return true;
+}
+
 bool validateRequest(const QString &targetId, const QJsonObject &request, QStringList *errors)
 {
     if (request.isEmpty()) {
@@ -67,13 +157,19 @@ bool validateRequest(const QString &targetId, const QJsonObject &request, QStrin
     if (url.isEmpty()) {
         return appendError(errors, QStringLiteral("Target '%1' request.url must be a non-empty string").arg(targetId));
     }
-    if (requestType != QLatin1StringView("multipart") && requestType != QLatin1StringView("raw")) {
-        return appendError(errors, QStringLiteral("Target '%1' request.type must be multipart or raw").arg(targetId));
+    if (requestType != QLatin1StringView("multipart")
+        && requestType != QLatin1StringView("raw")
+        && requestType != QLatin1StringView("form_urlencoded")
+        && requestType != QLatin1StringView("json")) {
+        return appendError(errors, QStringLiteral("Target '%1' request.type must be multipart, raw, form_urlencoded, or json").arg(targetId));
     }
     if (method.isEmpty()) {
         return appendError(errors, QStringLiteral("Target '%1' request.method must be a non-empty string").arg(targetId));
     }
     if (!validateStringMap(targetId, request.value(QStringLiteral("headers")), QStringLiteral("request.headers"), errors)) {
+        return false;
+    }
+    if (!validateStringMap(targetId, request.value(QStringLiteral("query")), QStringLiteral("request.query"), errors)) {
         return false;
     }
 
@@ -92,8 +188,38 @@ bool validateRequest(const QString &targetId, const QJsonObject &request, QStrin
         if (!validateStringMap(targetId, multipart.value(QStringLiteral("fields")), QStringLiteral("request.multipart.fields"), errors)) {
             return false;
         }
-    } else if (method.toUpper() != QLatin1StringView("POST") && method.toUpper() != QLatin1StringView("PUT")) {
-        return appendError(errors, QStringLiteral("Target '%1' request.method must be POST or PUT for raw").arg(targetId));
+    } else if (requestType == QLatin1StringView("raw")) {
+        if (method.toUpper() != QLatin1StringView("POST") && method.toUpper() != QLatin1StringView("PUT")) {
+            return appendError(errors, QStringLiteral("Target '%1' request.method must be POST or PUT for raw").arg(targetId));
+        }
+    } else if (requestType == QLatin1StringView("form_urlencoded")) {
+        if (method.toUpper() != QLatin1StringView("POST") && method.toUpper() != QLatin1StringView("PUT")) {
+            return appendError(errors, QStringLiteral("Target '%1' request.method must be POST or PUT for form_urlencoded").arg(targetId));
+        }
+        const QJsonObject form = objectValue(request, "formUrlencoded");
+        if (form.isEmpty()) {
+            return appendError(errors, QStringLiteral("Target '%1' request.formUrlencoded must be an object").arg(targetId));
+        }
+        if (!validateStringMap(targetId,
+                               form.value(QStringLiteral("fields")),
+                               QStringLiteral("request.formUrlencoded.fields"),
+                               errors)) {
+            return false;
+        }
+    } else if (requestType == QLatin1StringView("json")) {
+        if (method.toUpper() != QLatin1StringView("POST") && method.toUpper() != QLatin1StringView("PUT")) {
+            return appendError(errors, QStringLiteral("Target '%1' request.method must be POST or PUT for json").arg(targetId));
+        }
+        const QJsonObject json = objectValue(request, "json");
+        if (json.isEmpty()) {
+            return appendError(errors, QStringLiteral("Target '%1' request.json must be an object").arg(targetId));
+        }
+        if (!json.contains(QStringLiteral("fields"))) {
+            return appendError(errors, QStringLiteral("Target '%1' request.json.fields must be present").arg(targetId));
+        }
+        if (!validateJsonValuePlaceholders(targetId, json.value(QStringLiteral("fields")), QStringLiteral("request.json.fields"), errors)) {
+            return false;
+        }
     }
 
     return true;
@@ -111,6 +237,27 @@ bool validateMimePattern(const QString &rulePath, const QString &pattern, QStrin
     }
     if (pattern.startsWith(QLatin1StringView("*/")) && pattern != QLatin1StringView("*/*")) {
         return appendError(errors, QStringLiteral("%1.mime entries must be exact MIME types, type/*, or */*").arg(rulePath));
+    }
+    return true;
+}
+
+bool validateExtensions(const QString &targetId, const QJsonValue &value, QStringList *errors)
+{
+    if (!value.isUndefined() && !value.isArray()) {
+        return appendError(errors, QStringLiteral("Target '%1' extensions must be a list").arg(targetId));
+    }
+
+    for (const QJsonValue &entry : value.toArray()) {
+        const QString text = entry.toString().trimmed();
+        if (text.isEmpty()) {
+            return appendError(errors, QStringLiteral("Target '%1' extensions must contain non-empty strings").arg(targetId));
+        }
+        const QString normalized = text.startsWith(QLatin1Char('.')) ? text.mid(1) : text;
+        if (normalized.isEmpty() || normalized.contains(QLatin1Char('/')) || normalized.contains(QLatin1Char('*'))
+            || normalized.contains(QLatin1Char(' '))) {
+            return appendError(errors,
+                               QStringLiteral("Target '%1' extensions must contain plain file suffixes such as png or .png").arg(targetId));
+        }
     }
     return true;
 }
@@ -228,34 +375,16 @@ bool validatePreUpload(const QString &targetId, const QJsonValue &value, QString
 
 bool validateResponse(const QString &targetId, const QJsonObject &response, QStringList *errors)
 {
-    if (response.isEmpty()) {
-        return appendError(errors, QStringLiteral("Target '%1' missing response object").arg(targetId));
+    if (!validateResponseExtractor(targetId, response, QStringLiteral("response"), errors)) {
+        return false;
     }
-
-    const QString responseType = stringValue(response, "type");
-    if (responseType != QLatin1StringView("text_url")
-        && responseType != QLatin1StringView("regex")
-        && responseType != QLatin1StringView("json_pointer")) {
-        return appendError(errors, QStringLiteral("Target '%1' response.type must be text_url, regex, or json_pointer").arg(targetId));
+    const QJsonValue errorValue = response.value(QStringLiteral("error"));
+    if (!errorValue.isUndefined() && !errorValue.isObject()) {
+        return appendError(errors, QStringLiteral("Target '%1' response.error must be an object").arg(targetId));
     }
-
-    if (responseType == QLatin1StringView("regex")) {
-        if (stringValue(response, "pattern").isEmpty()) {
-            return appendError(errors, QStringLiteral("Target '%1' response.pattern must be a non-empty string").arg(targetId));
-        }
-        if (!response.value(QStringLiteral("group")).isUndefined() && response.value(QStringLiteral("group")).toInt(-1) < 0) {
-            return appendError(errors, QStringLiteral("Target '%1' response.group must be a non-negative integer").arg(targetId));
-        }
-    }
-
-    if (responseType == QLatin1StringView("json_pointer")) {
-        const QString pointer = stringValue(response, "pointer");
-        if (pointer.isEmpty()) {
-            return appendError(errors, QStringLiteral("Target '%1' response.pointer must be a non-empty string").arg(targetId));
-        }
-        if (!pointer.startsWith(QLatin1Char('/'))) {
-            return appendError(errors, QStringLiteral("Target '%1' response.pointer must start with '/'").arg(targetId));
-        }
+    if (errorValue.isObject()
+        && !validateResponseExtractor(targetId, errorValue.toObject(), QStringLiteral("response.error"), errors)) {
+        return false;
     }
     return true;
 }
@@ -281,6 +410,9 @@ bool TargetConfigValidator::validateTarget(const QJsonObject &target, QStringLis
         return appendError(errors, QStringLiteral("Target '%1' pluginTypes must be a list").arg(targetId));
     }
     if (!validateConstraints(targetId, target.value(QStringLiteral("constraints")), errors)) {
+        return false;
+    }
+    if (!validateExtensions(targetId, target.value(QStringLiteral("extensions")), errors)) {
         return false;
     }
     return true;

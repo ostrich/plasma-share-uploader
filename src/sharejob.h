@@ -26,6 +26,7 @@ private:
     QJsonObject m_targetConfig;
     TargetUploader m_uploader;
     QStringList m_files;
+    QList<UploadResult> m_uploadResults;
     QStringList m_uploadedUrls;
     QStringList m_tempDirs;
     int m_nextIndex = 0;

@@ -1,0 +1,18 @@
+{
+  "id": "transfer_sh",
+  "displayName": "transfer.sh",
+  "description": "Upload files to transfer.sh",
+  "icon": "folder-upload",
+  "pluginTypes": ["ShareUrl", "Export"],
+  "request": {
+    "url": "https://transfer.sh",
+    "method": "POST",
+    "multipart": {
+      "fields": {},
+      "fileField": "file"
+    }
+  },
+  "response": {
+    "type": "text_url"
+  }
+}

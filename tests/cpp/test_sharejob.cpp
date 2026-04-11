@@ -20,6 +20,7 @@ class ShareJobTest final : public QObject
 private slots:
     void noLocalFilesFails();
     void uploadsMultipleFilesSequentiallyAndUpdatesClipboard();
+    void uploadsExposeVariantUrlsAndResponseMetadata();
     void preUploadTransformsUploadedBodyWithoutMutatingSource();
     void preUploadFailureStopsBeforeAnyUpload();
 };
@@ -51,8 +52,8 @@ void ShareJobTest::uploadsMultipleFilesSequentiallyAndUpdatesClipboard()
 {
     HttpCaptureServer server;
     QVERIFY(server.start());
-    server.enqueueResponse({200, "OK", "text/plain", "https://files.example/one"});
-    server.enqueueResponse({200, "OK", "text/plain", "https://files.example/two"});
+    server.enqueueResponse({200, "OK", "text/plain", {}, "https://files.example/one"});
+    server.enqueueResponse({200, "OK", "text/plain", {}, "https://files.example/two"});
 
     QTemporaryDir dir;
     const QString first = writeTempFile(dir, QStringLiteral("one.txt"), "body-one");
@@ -96,13 +97,68 @@ void ShareJobTest::uploadsMultipleFilesSequentiallyAndUpdatesClipboard()
     QCOMPARE(server.requests().at(1).body, QByteArray("body-two"));
 }
 
+void ShareJobTest::uploadsExposeVariantUrlsAndResponseMetadata()
+{
+    HttpCaptureServer server;
+    QVERIFY(server.start());
+    server.enqueueResponse({200,
+                            "OK",
+                            "application/json",
+                            {{"X-Delete", "https://files.example/delete/1"}},
+                            R"({"data":{"url":"https://files.example/main","thumb":"https://files.example/thumb"}})"});
+
+    QTemporaryDir dir;
+    const QString filePath = writeTempFile(dir, QStringLiteral("one.txt"), "body-one");
+    const QJsonObject config{
+        {QStringLiteral("id"), QStringLiteral("raw")},
+        {QStringLiteral("displayName"), QStringLiteral("Raw Target")},
+        {QStringLiteral("request"),
+         QJsonObject{{QStringLiteral("url"), server.url(QStringLiteral("/upload")).toString()},
+                     {QStringLiteral("method"), QStringLiteral("PUT")},
+                     {QStringLiteral("type"), QStringLiteral("raw")}}},
+        {QStringLiteral("response"),
+         QJsonObject{{QStringLiteral("type"), QStringLiteral("json_pointer")},
+                     {QStringLiteral("pointer"), QStringLiteral("/data/url")},
+                     {QStringLiteral("thumbnail"),
+                      QJsonObject{{QStringLiteral("type"), QStringLiteral("json_pointer")},
+                                  {QStringLiteral("pointer"), QStringLiteral("/data/thumb")}}},
+                     {QStringLiteral("deletion"),
+                      QJsonObject{{QStringLiteral("type"), QStringLiteral("header")},
+                                  {QStringLiteral("name"), QStringLiteral("X-Delete")}}}}}};
+
+    ShareJob job(QJsonDocument(config).toJson(QJsonDocument::Compact));
+    job.setAutoDelete(false);
+    job.setData(QJsonObject{{QStringLiteral("url"), QUrl::fromLocalFile(filePath).toString()}});
+
+    QSignalSpy resultSpy(&job, &KJob::result);
+    job.start();
+
+    QTRY_COMPARE(resultSpy.count(), 1);
+    QCOMPARE(job.error(), 0);
+    const QJsonObject output = job.output();
+    QCOMPARE(output.value(QStringLiteral("url")).toString(), QStringLiteral("https://files.example/main"));
+    QCOMPARE(output.value(QStringLiteral("thumbnailUrl")).toString(), QStringLiteral("https://files.example/thumb"));
+    QCOMPARE(output.value(QStringLiteral("deletionUrl")).toString(), QStringLiteral("https://files.example/delete/1"));
+    const QJsonArray results = output.value(QStringLiteral("results")).toArray();
+    QCOMPARE(results.size(), 1);
+    const QJsonObject result = results.first().toObject();
+    QCOMPARE(result.value(QStringLiteral("url")).toString(), QStringLiteral("https://files.example/main"));
+    QCOMPARE(result.value(QStringLiteral("thumbnailUrl")).toString(), QStringLiteral("https://files.example/thumb"));
+    QCOMPARE(result.value(QStringLiteral("deletionUrl")).toString(), QStringLiteral("https://files.example/delete/1"));
+    const QJsonObject response = result.value(QStringLiteral("response")).toObject();
+    QCOMPARE(response.value(QStringLiteral("statusCode")).toInt(), 200);
+    QCOMPARE(response.value(QStringLiteral("responseUrl")).toString(), server.url(QStringLiteral("/upload")).toString());
+    QCOMPARE(response.value(QStringLiteral("headers")).toObject().value(QStringLiteral("x-delete")).toString(),
+             QStringLiteral("https://files.example/delete/1"));
+}
+
 void ShareJobTest::preUploadTransformsUploadedBodyWithoutMutatingSource()
 {
     QVERIFY2(!pythonExecutable().isEmpty(), "python3 is required for sharejob preupload tests");
 
     HttpCaptureServer server;
     QVERIFY(server.start());
-    server.enqueueResponse({200, "OK", "text/plain", "https://files.example/processed"});
+    server.enqueueResponse({200, "OK", "text/plain", {}, "https://files.example/processed"});
 
     QTemporaryDir dir;
     const QString filePath = writeTempFile(dir, QStringLiteral("sample.txt"), "payload");

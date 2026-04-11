@@ -1,16 +1,29 @@
 #pragma once
 
 #include <QJsonObject>
-#include <QNetworkReply>
 #include <QNetworkAccessManager>
-#include <QRegularExpression>
+#include <QNetworkReply>
 #include <QString>
-#include <QStringList>
+
+struct UploadResponseInfo {
+    int statusCode = 0;
+    QString reasonPhrase;
+    QString responseUrl;
+    QJsonObject headers;
+    QString responseText;
+
+    QJsonObject toJson() const;
+};
 
 struct UploadResult {
     bool ok = false;
     QString url;
+    QString thumbnailUrl;
+    QString deletionUrl;
     QString errorMessage;
+    UploadResponseInfo responseInfo;
+
+    QJsonObject toJson() const;
 };
 
 class TargetUploader
@@ -27,7 +40,4 @@ public:
 
 private:
     QJsonObject m_config;
-    QRegularExpression m_responseRegex;
-    int m_responseGroup = 1;
-    QString m_jsonPointer;
 };

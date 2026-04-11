@@ -1,4 +1,4 @@
-# Runtime Target Picker Notes
+# Runtime Target Picker Ideas
 
 Working notes for the `runtime-target-picker` branch. These are product and UX
 ideas for replacing build-time target generation with a single runtime-configurable
@@ -26,6 +26,11 @@ plugin.
   - schema-aware validation
   - helpful error messages
   - syntax highlighting
+- Carry structured response metadata through the app for diagnostics and future UI:
+  - HTTP status
+  - response URL
+  - response headers
+  - raw response text
 
 ## Target Creation
 
@@ -41,6 +46,21 @@ plugin.
 - User targets and default targets should probably coexist, with user config able
   to override defaults by `id`.
 
+## Future Ideas
+
+- Richer parsed outputs beyond the main URL:
+  - thumbnail URL
+  - deletion URL
+- First-class text upload targets, not just file/image targets:
+  - add a text input mode alongside file input
+  - support paste-style targets such as PrivateBin or Hastebin
+  - keep this as a real input-model expansion, not just more example configs
+- Structured runtime prompts for targets, instead of string mini-language features:
+  - select-style prompts
+  - free-text input prompts
+- SXCU / ShareX custom uploader import as a compatibility layer, not the native
+  target format.
+
 ## Open Questions
 
 - Whether the picker should only show targets compatible with the selected files,
@@ -48,3 +68,7 @@ plugin.
 - How defaults should be stored and updated over time.
 - Whether the config editor and doctor UI should be the same screen or two related
   screens.
+- Extension-based filters are filename-based. For unsaved or extensionless files
+  (for example content exported from another app without a suffix yet), a target
+  narrowed by `extensions` may be hidden even if the file content would match by
+  MIME. We may want a future fallback policy for that case.

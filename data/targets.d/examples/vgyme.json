@@ -1,0 +1,29 @@
+{
+  "id": "vgyme",
+  "displayName": "vgy.me",
+  "description": "Upload images to vgy.me",
+  "icon": "image-x-generic",
+  "pluginTypes": ["ShareUrl", "Export"],
+  "constraints": ["mimeType:image/*"],
+  "extensions": ["jpg", "jpeg", "png", "gif", "webp"],
+  "request": {
+    "url": "https://vgy.me/upload",
+    "method": "POST",
+    "multipart": {
+      "fields": {},
+      "fileField": "file"
+    }
+  },
+  "response": {
+    "type": "json_pointer",
+    "pointer": "/image",
+    "deletion": {
+      "type": "json_pointer",
+      "pointer": "/delete"
+    },
+    "error": {
+      "type": "json_pointer",
+      "pointer": "/description"
+    }
+  }
+}

@@ -2,10 +2,11 @@
 
 #include "targetconfigvalidator.h"
 
+#include <QDir>
 #include <QFile>
-#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMap>
 #include <QStandardPaths>
 
 namespace {
@@ -16,54 +17,50 @@ QString defaultSystemTargetsPath()
 
 QString defaultUserTargetsPath()
 {
-    return QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + QStringLiteral("/targets.json");
+    return QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + QStringLiteral("/targets.d");
 }
 
-void loadTargetsFromFile(const QString &path, bool required, QMap<QString, TargetDefinition> &targets, QStringList &errors)
+void loadTargetFile(const QString &path, QMap<QString, TargetDefinition> &targets, QStringList &errors)
 {
     QFile file(path);
-    if (!file.exists()) {
-        if (required) {
-            errors.append(QStringLiteral("Missing targets file: %1").arg(path));
-        }
-        return;
-    }
     if (!file.open(QIODevice::ReadOnly)) {
-        errors.append(QStringLiteral("Failed to open targets file: %1").arg(path));
+        errors.append(QStringLiteral("Failed to open target file: %1").arg(path));
         return;
     }
 
     const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-    if (!doc.isObject()) {
-        errors.append(QStringLiteral("Targets file is not a JSON object: %1").arg(path));
+    if (!doc.isObject() || doc.object().isEmpty()) {
+        errors.append(QStringLiteral("Target file is not a JSON object: %1").arg(path));
         return;
     }
 
-    const QJsonValue targetsValue = doc.object().value(QStringLiteral("targets"));
-    if (!targetsValue.isArray()) {
-        errors.append(QStringLiteral("Targets file does not contain a targets array: %1").arg(path));
+    const QJsonObject targetObject = doc.object();
+    QStringList validationErrors;
+    if (!TargetConfigValidator::validateTarget(targetObject, &validationErrors)) {
+        for (const QString &message : std::as_const(validationErrors)) {
+            errors.append(QStringLiteral("%1 (%2)").arg(message, path));
+        }
         return;
     }
 
-    const QJsonArray targetArray = targetsValue.toArray();
-    for (int i = 0; i < targetArray.size(); ++i) {
-        if (!targetArray.at(i).isObject()) {
-            errors.append(QStringLiteral("Target entry %1 in %2 is not an object").arg(i).arg(path));
-            continue;
-        }
+    TargetDefinition definition;
+    definition.config = targetObject;
+    targets.insert(definition.id(), definition);
+}
 
-        const QJsonObject targetObject = targetArray.at(i).toObject();
-        QStringList validationErrors;
-        if (!TargetConfigValidator::validateTarget(targetObject, &validationErrors)) {
-            for (const QString &message : std::as_const(validationErrors)) {
-                errors.append(QStringLiteral("%1 (%2)").arg(message, path));
-            }
-            continue;
+void loadTargetsFromDirectory(const QString &path, bool required, QMap<QString, TargetDefinition> &targets, QStringList &errors)
+{
+    const QDir dir(path);
+    if (!dir.exists()) {
+        if (required) {
+            errors.append(QStringLiteral("Missing targets directory: %1").arg(path));
         }
+        return;
+    }
 
-        TargetDefinition definition;
-        definition.config = targetObject;
-        targets.insert(definition.id(), definition);
+    const QStringList fileNames = dir.entryList(QStringList{QStringLiteral("*.json")}, QDir::Files, QDir::Name);
+    for (const QString &fileName : fileNames) {
+        loadTargetFile(dir.filePath(fileName), targets, errors);
     }
 }
 }
@@ -79,8 +76,8 @@ TargetRegistry::LoadResult TargetRegistry::loadTargets() const
     LoadResult result;
     QMap<QString, TargetDefinition> mergedTargets;
 
-    loadTargetsFromFile(systemTargetsPath(), true, mergedTargets, result.errors);
-    loadTargetsFromFile(userTargetsPath(), false, mergedTargets, result.errors);
+    loadTargetsFromDirectory(systemTargetsPath(), true, mergedTargets, result.errors);
+    loadTargetsFromDirectory(userTargetsPath(), false, mergedTargets, result.errors);
 
     result.targets = mergedTargets.values();
     return result;

@@ -5,6 +5,8 @@
 #include <QProcessEnvironment>
 #include <QRegularExpression>
 #include <QUrl>
+#include <QUrlQuery>
+#include <QtXml/QDomDocument>
 
 namespace {
 QString decodeJsonPointerToken(const QString &token)
@@ -13,6 +15,44 @@ QString decodeJsonPointerToken(const QString &token)
     out.replace(QStringLiteral("~1"), QStringLiteral("/"));
     out.replace(QStringLiteral("~0"), QStringLiteral("~"));
     return out;
+}
+
+QString substituteFilename(const QString &value, const QFileInfo &fileInfo, bool urlEncode)
+{
+    QString result = value;
+    const QString fileName = urlEncode
+        ? QString::fromUtf8(QUrl::toPercentEncoding(fileInfo.fileName()))
+        : fileInfo.fileName();
+    result.replace(QStringLiteral("${FILENAME}"), fileName);
+    return result;
+}
+
+QDomNode resolveXmlSegment(const QDomNode &parent, const QString &segment)
+{
+    static const QRegularExpression indexedSegment(QStringLiteral(R"(^(.*)\[(\d+)\]$)"));
+
+    QString name = segment;
+    int index = 1;
+    const QRegularExpressionMatch match = indexedSegment.match(segment);
+    if (match.hasMatch()) {
+        name = match.captured(1);
+        index = match.captured(2).toInt();
+    }
+    if (name.isEmpty() || index <= 0) {
+        return {};
+    }
+
+    int seen = 0;
+    for (QDomNode child = parent.firstChild(); !child.isNull(); child = child.nextSibling()) {
+        if (!child.isElement() || child.nodeName() != name) {
+            continue;
+        }
+        ++seen;
+        if (seen == index) {
+            return child;
+        }
+    }
+    return {};
 }
 }
 
@@ -47,15 +87,19 @@ QString TargetUploaderUtils::substituteEnv(const QString &value)
     return result;
 }
 
-QString TargetUploaderUtils::applyUrlTemplate(const QString &urlTemplate, const QFileInfo &fileInfo)
+QString TargetUploaderUtils::substituteRequestValue(const QString &value, const QFileInfo &fileInfo)
 {
-    QString url = substituteEnv(urlTemplate);
-    const QByteArray encodedName = QUrl::toPercentEncoding(fileInfo.fileName());
-    url.replace(QStringLiteral("${FILENAME}"), QString::fromUtf8(encodedName));
-    return url;
+    return substituteFilename(substituteEnv(value), fileInfo, false);
 }
 
-void TargetUploaderUtils::applyHeaders(const QJsonObject &requestConfig, QNetworkRequest &requestObj)
+QString TargetUploaderUtils::applyUrlTemplate(const QString &urlTemplate, const QFileInfo &fileInfo)
+{
+    return substituteFilename(substituteEnv(urlTemplate), fileInfo, true);
+}
+
+void TargetUploaderUtils::applyHeaders(const QJsonObject &requestConfig,
+                                       const QFileInfo &fileInfo,
+                                       QNetworkRequest &requestObj)
 {
     const QJsonValue headersValue = requestConfig.value(QLatin1StringView("headers"));
     if (!headersValue.isObject()) {
@@ -65,9 +109,51 @@ void TargetUploaderUtils::applyHeaders(const QJsonObject &requestConfig, QNetwor
     for (auto it = headers.begin(); it != headers.end(); ++it) {
         const QByteArray name = it.key().toUtf8();
         const QString rawValue = it.value().toString();
-        const QByteArray value = substituteEnv(rawValue).toUtf8();
+        const QByteArray value = substituteRequestValue(rawValue, fileInfo).toUtf8();
         requestObj.setRawHeader(name, value);
     }
+}
+
+QUrl TargetUploaderUtils::applyQueryParameters(const QString &urlTemplate,
+                                               const QJsonObject &requestConfig,
+                                               const QFileInfo &fileInfo)
+{
+    QUrl url = QUrl::fromUserInput(applyUrlTemplate(urlTemplate, fileInfo));
+    const QJsonValue queryValue = requestConfig.value(QLatin1StringView("query"));
+    if (!queryValue.isObject()) {
+        return url;
+    }
+
+    QUrlQuery query(url);
+    const QJsonObject fields = queryValue.toObject();
+    for (auto it = fields.begin(); it != fields.end(); ++it) {
+        query.addQueryItem(it.key(), substituteRequestValue(it.value().toString(), fileInfo));
+    }
+    url.setQuery(query);
+    return url;
+}
+
+QJsonValue TargetUploaderUtils::substituteJsonValue(const QJsonValue &value, const QFileInfo &fileInfo)
+{
+    if (value.isString()) {
+        return substituteRequestValue(value.toString(), fileInfo);
+    }
+    if (value.isArray()) {
+        QJsonArray array;
+        for (const QJsonValue &entry : value.toArray()) {
+            array.append(substituteJsonValue(entry, fileInfo));
+        }
+        return array;
+    }
+    if (value.isObject()) {
+        QJsonObject object;
+        const QJsonObject source = value.toObject();
+        for (auto it = source.begin(); it != source.end(); ++it) {
+            object.insert(it.key(), substituteJsonValue(it.value(), fileInfo));
+        }
+        return object;
+    }
+    return value;
 }
 
 QJsonValue TargetUploaderUtils::resolveJsonPointer(const QJsonValue &root, const QString &pointer)
@@ -103,4 +189,41 @@ QJsonValue TargetUploaderUtils::resolveJsonPointer(const QJsonValue &root, const
     }
 
     return current;
+}
+
+QString TargetUploaderUtils::resolveXmlPath(const QByteArray &xmlBytes, const QString &xpath)
+{
+    if (xpath.isEmpty() || !xpath.startsWith(QLatin1Char('/'))) {
+        return {};
+    }
+
+    QDomDocument xml;
+    QString errorMessage;
+    int errorLine = 0;
+    int errorColumn = 0;
+    if (!xml.setContent(xmlBytes, &errorMessage, &errorLine, &errorColumn)) {
+        Q_UNUSED(errorMessage)
+        Q_UNUSED(errorLine)
+        Q_UNUSED(errorColumn)
+        return {};
+    }
+
+    const QStringList parts = xpath.mid(1).split(QLatin1Char('/'), Qt::SkipEmptyParts);
+    if (parts.isEmpty()) {
+        return {};
+    }
+
+    QDomNode current = xml.documentElement();
+    if (current.isNull() || current.nodeName() != parts.first()) {
+        return {};
+    }
+
+    for (int i = 1; i < parts.size(); ++i) {
+        current = resolveXmlSegment(current, parts.at(i));
+        if (current.isNull()) {
+            return {};
+        }
+    }
+
+    return current.firstChild().nodeValue();
 }

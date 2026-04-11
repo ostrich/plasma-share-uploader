@@ -1,6 +1,6 @@
 # Plasma Share Uploader
 
-Create custom upload targets for the KDE Plasma 6 Share menu. New targets are user-definable in JSON; no code modification required. [Catbox](https://catbox.moe/) and [Uguu](https://uguu.se/) included by default.
+Create runtime-configurable upload targets for the KDE Plasma 6 Share menu. The package ships one generic `Upload...` action that loads targets from JSON at runtime. [Catbox](https://catbox.moe/) and [Uguu](https://uguu.se/) are included by default.
 
 ![Screenshot](docs/screenshot.png)
 
@@ -23,8 +23,8 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-The test suite includes Python generator tests and C++ integration tests that use a
-local in-process HTTP server. It does not contact external upload services.
+The test suite includes C++ unit and integration tests that use a local in-process HTTP
+server. It does not contact external upload services.
 
 ## Install
 
@@ -33,48 +33,77 @@ cmake --install build
 ```
 
 Plugins install to the Purpose plugin directory (`${KDE_INSTALL_QTPLUGINDIR}/kf6/purpose`).
-Restart Dolphin/Gwenview/other Purpose-Share-enabled app after installing so the new Share action shows up.
+The package also installs bundled targets under `/usr/share/plasma-share-uploader/targets.d/`.
+Restart Dolphin/Gwenview/other Purpose-Share-enabled app after installing so the `Upload...` Share action shows up.
 
 ## Targets
 
-Targets live in `targets.json`. Each entry generates its own Share plugin at configure time.
-After editing `targets.json`, re-run the configure step (`cmake -S . -B build`) so plugins are regenerated.
-Additional example targets are available in `targets.sample.json` for reference when adding new services.
+Targets are loaded at runtime from:
+- system defaults: `/usr/share/plasma-share-uploader/targets.d/*.json`
+- user overrides/custom targets: `~/.config/plasma-share-uploader/targets.d/*.json`
 
-### Adding a new target
+Each file contains exactly one target object. Targets are merged by `id`, and user
+targets override system targets with the same `id`.
 
-Each target entry is an object inside the `targets` array. Required fields:
-- `id`: lowercase identifier used for plugin names; `[a-z0-9][a-z0-9_-]*`.
-- `displayName`: human-friendly name shown in Share menus.
-- `description`: short description for plugin metadata.
+You do not need to rebuild after editing the user config. Add or edit files in the user
+directory, then restart the Share-enabled app or reopen its Share dialog so it reloads
+the target list.
+
+Invalid target files are skipped. If a config file contains errors, the picker dialog shows
+the paths it checked and the validation errors it encountered.
+
+### Target format
+
+Each target file is a single JSON object with these required fields:
+- `id`: lowercase identifier for overrides and merges; `[a-z0-9][a-z0-9_-]*`.
+- `displayName`: human-friendly name shown in the picker.
+- `description`: short description shown under the target name.
 - `icon`: icon name (e.g. `image-x-generic`).
 - `request`: upload configuration (see below).
 - `response`: how to extract the URL from the server response.
 
 Optional fields:
-- `pluginTypes`: Purpose plugin types (defaults to `["ShareUrl"]`).
-- `constraints`: Purpose constraints (e.g. `["mimeType:image/*"]`).
+- `pluginTypes`: accepted for compatibility, but not used by the runtime picker.
+- `constraints`: target filters such as `["mimeType:image/*"]`. These are evaluated at runtime against the files being shared.
+- `extensions`: optional list of file suffixes such as `["png", ".jpg"]`. If present, every shared file must match one of them.
 - `preUpload`: ordered list of per-file preprocessing rules to run before upload.
 
 ### Request formats
 
 `request` includes:
-- `url`: upload endpoint URL. Supports `${ENV:VAR}` substitution.
-- `method`: HTTP method. `POST` for multipart; `POST` or `PUT` for raw uploads.
-- `type` (optional): `multipart` (default) or `raw`.
+- `url`: upload endpoint URL. Supports `${ENV:VAR}` substitution, and `${FILENAME}` in URL paths.
+- `method`: HTTP method. `multipart`, `raw`, `form_urlencoded`, and `json` currently support `POST` and `PUT` as documented below.
+- `query`: optional query-string parameter map.
+- `headers`: optional header map.
+- `type` (optional): `multipart` (default), `raw`, `form_urlencoded`, or `json`.
+
+Request string placeholders:
+- `${ENV:VARNAME}`: expand from the environment.
+- `${FILENAME}`: expand to the local file name.
 
 Multipart uploads:
 - `request.type`: `multipart` (or omitted).
 - `request.multipart.fileField`: form field name for the file.
 - `request.multipart.fields`: optional extra form fields (string values only).
+  Field values support `${ENV:VARNAME}` and `${FILENAME}`.
 
 Raw uploads:
 - `request.type`: `raw`.
-- `request.url` may include `${FILENAME}` to inject the local file name (e.g. transfer.sh).
 - `request.contentType`: optional Content-Type to set for the file body.
 
-Headers:
-- `request.headers`: object of header name -> value (string values only), values support `${ENV:VARNAME}` substitution.
+Form URL encoded uploads:
+- `request.type`: `form_urlencoded`.
+- `request.formUrlencoded.fields`: required string map sent as `application/x-www-form-urlencoded`.
+  Field values support `${ENV:VARNAME}` and `${FILENAME}`.
+
+JSON uploads:
+- `request.type`: `json`.
+- `request.json.fields`: required JSON value written as `application/json`.
+  String values inside the JSON body support `${ENV:VARNAME}` and `${FILENAME}`.
+
+Headers and query parameters:
+- `request.headers`: string map. Values support `${ENV:VARNAME}` and `${FILENAME}`.
+- `request.query`: string map. Values support `${ENV:VARNAME}` and `${FILENAME}`.
 
 ### Pre-upload commands
 
@@ -112,8 +141,32 @@ If you want a catch-all fallback rule, use `*/*` and place it last.
 - `text_url`: response body is the URL.
 - `regex`: use `pattern` and optional `group` to extract URL from response text.
 - `json_pointer`: use `pointer` (must start with `/`) to locate a string URL in a JSON response.
+- `header`: use `name` to read a response header.
+- `redirect_url`: use the redirect target URL, or the final reply URL if no redirect target is reported.
+- `xml_xpath`: use `xpath` (must start with `/`) to locate a text node in an XML response.
 
-### Example
+Optional error extraction:
+- `response.error`: optional extractor object with the same `type` choices as `response`.
+- On HTTP error responses, the uploader will try `response.error` before falling back to the raw server response text.
+
+Optional variant outputs:
+- `response.thumbnail`: optional extractor object for a thumbnail URL.
+- `response.deletion`: optional extractor object for a deletion URL.
+
+`ShareJob` output now includes:
+- `url` / `urls`
+- `thumbnailUrl` / `thumbnailUrls` when configured
+- `deletionUrl` / `deletionUrls` when configured
+- `results`: per-upload objects containing `url`, optional `thumbnailUrl`, optional `deletionUrl`, and `response`
+
+Each `response` object contains:
+- `statusCode`
+- `reasonPhrase`
+- `responseUrl`
+- `headers` with lowercased header names
+- `responseText`
+
+### User override example
 
 ```json
 {
@@ -153,3 +206,47 @@ If you want a catch-all fallback rule, use `*/*` and place it last.
   }
 }
 ```
+
+To define this as a user target, save it as its own file such as
+`~/.config/plasma-share-uploader/targets.d/example.json`:
+
+```json
+{
+  "id": "example",
+  "displayName": "ExampleHost",
+  "description": "Upload images to ExampleHost",
+  "icon": "image-x-generic",
+  "constraints": ["mimeType:image/*"],
+  "request": {
+    "url": "https://example.com/upload",
+    "method": "POST",
+    "multipart": {
+      "fields": {
+        "token": "${ENV:EXAMPLE_TOKEN}"
+      },
+      "fileField": "file"
+    }
+  },
+  "preUpload": [
+    {
+      "mime": ["image/*"],
+      "fileHandling": "inplace_copy",
+      "commands": [
+        {
+          "argv": ["exiv2", "rm", "${FILE}"]
+        },
+        {
+          "argv": ["oxipng", "--strip", "all", "${FILE}"]
+        }
+      ]
+    }
+  ],
+  "response": {
+    "type": "json_pointer",
+    "pointer": "/data/url"
+  }
+}
+```
+
+If you want to override a bundled target, give your file the same `id` as the system
+target. The user definition wins at runtime.

@@ -19,6 +19,7 @@ struct QueuedHttpResponse {
     int statusCode = 200;
     QByteArray reasonPhrase = "OK";
     QByteArray contentType = "text/plain";
+    QHash<QByteArray, QByteArray> headers;
     QByteArray body;
 };
 

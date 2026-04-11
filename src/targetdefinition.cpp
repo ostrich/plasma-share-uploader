@@ -47,3 +47,8 @@ QStringList TargetDefinition::constraints() const
 {
     return stringListValue(config, "constraints");
 }
+
+QStringList TargetDefinition::extensions() const
+{
+    return stringListValue(config, "extensions");
+}

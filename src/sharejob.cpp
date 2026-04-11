@@ -13,6 +13,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QNetworkRequest>
 #include <QNetworkReply>
 
 ShareJob::ShareJob(const QByteArray &configJson, QObject *parent)
@@ -50,9 +51,31 @@ void ShareJob::startNextUpload()
 {
     if (m_nextIndex >= m_files.size()) {
         QJsonObject output;
+        QJsonArray resultsArray;
+        QJsonArray thumbnailUrls;
+        QJsonArray deletionUrls;
+        for (const UploadResult &result : std::as_const(m_uploadResults)) {
+            resultsArray.append(result.toJson());
+            if (!result.thumbnailUrl.isEmpty()) {
+                thumbnailUrls.append(result.thumbnailUrl);
+            }
+            if (!result.deletionUrl.isEmpty()) {
+                deletionUrls.append(result.deletionUrl);
+            }
+        }
+
+        output.insert(QStringLiteral("results"), resultsArray);
         output.insert(QStringLiteral("urls"), QJsonArray::fromStringList(m_uploadedUrls));
         if (!m_uploadedUrls.isEmpty()) {
             output.insert(QStringLiteral("url"), m_uploadedUrls.first());
+        }
+        if (!thumbnailUrls.isEmpty()) {
+            output.insert(QStringLiteral("thumbnailUrls"), thumbnailUrls);
+            output.insert(QStringLiteral("thumbnailUrl"), thumbnailUrls.first());
+        }
+        if (!deletionUrls.isEmpty()) {
+            output.insert(QStringLiteral("deletionUrls"), deletionUrls);
+            output.insert(QStringLiteral("deletionUrl"), deletionUrls.first());
         }
         setOutput(output);
 
@@ -93,7 +116,8 @@ void ShareJob::startNextUpload()
 
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         const QNetworkReply::NetworkError error = reply->error();
-        if (error != QNetworkReply::NoError) {
+        const bool hasHttpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).isValid();
+        if (error != QNetworkReply::NoError && !hasHttpStatus) {
             const QString message = reply->errorString();
             reply->deleteLater();
             finishError(message);
@@ -108,6 +132,7 @@ void ShareJob::startNextUpload()
             return;
         }
 
+        m_uploadResults.append(result);
         m_uploadedUrls.append(result.url);
         ++m_nextIndex;
         startNextUpload();
@@ -137,11 +162,15 @@ void ShareJob::cleanupTempArtifacts()
 bool ShareJob::ensureTargetSelected()
 {
     TargetRegistry registry;
+    const QString systemTargetsPath = registry.systemTargetsPath();
+    const QString userTargetsPath = registry.userTargetsPath();
     const TargetRegistry::LoadResult loadResult = registry.loadTargets();
     const QList<TargetDefinition> compatibleTargets = ConstraintMatcher::filterTargets(loadResult.targets, m_files);
 
     if (compatibleTargets.isEmpty()) {
         QString message = QStringLiteral("No compatible upload targets available.");
+        message.append(QStringLiteral("\n\nSystem targets: %1").arg(systemTargetsPath));
+        message.append(QStringLiteral("\nUser targets: %1").arg(userTargetsPath));
         if (!loadResult.errors.isEmpty()) {
             message.append(QStringLiteral("\n\n"));
             message.append(loadResult.errors.join(QLatin1Char('\n')));
@@ -151,7 +180,7 @@ bool ShareJob::ensureTargetSelected()
     }
 
     QWidget *parentWidget = QApplication::activeWindow();
-    TargetPickerDialog dialog(compatibleTargets, parentWidget);
+    TargetPickerDialog dialog(compatibleTargets, loadResult.errors, systemTargetsPath, userTargetsPath, parentWidget);
     if (dialog.exec() != QDialog::Accepted) {
         finishError(QStringLiteral("Upload cancelled."));
         return false;

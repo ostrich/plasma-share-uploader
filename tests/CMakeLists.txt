@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Test Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Test Widgets Xml)
 
 set(IMSHARE_TEST_SUPPORT_SOURCES
     cpp/httpcaptureserver.cpp
@@ -32,6 +32,7 @@ function(imshare_add_cpp_test target)
         Qt6::Network
         Qt6::Test
         Qt6::Widgets
+        Qt6::Xml
         KF6::CoreAddons
         KF6::Purpose
         KF6::Notifications
@@ -44,7 +45,7 @@ function(imshare_add_cpp_test target)
     target_compile_definitions(${target} PRIVATE
         QT_NO_CAST_FROM_ASCII
         PLASMA_SHARE_UPLOADER_VERSION="${PROJECT_VERSION}"
-        PLASMA_SHARE_UPLOADER_SYSTEM_TARGETS_PATH="${PROJECT_SOURCE_DIR}/data/targets.json"
+        PLASMA_SHARE_UPLOADER_SYSTEM_TARGETS_PATH="${PROJECT_SOURCE_DIR}/data/targets.d"
         IMSHARE_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     )
     add_test(NAME ${target} COMMAND ${target})

@@ -1,0 +1,23 @@
+{
+  "id": "pomf",
+  "displayName": "Pomf",
+  "description": "Upload files to a Pomf-style host",
+  "icon": "folder-upload",
+  "pluginTypes": ["ShareUrl", "Export"],
+  "request": {
+    "url": "https://example.invalid/upload.php",
+    "method": "POST",
+    "multipart": {
+      "fields": {},
+      "fileField": "files[]"
+    }
+  },
+  "response": {
+    "type": "json_pointer",
+    "pointer": "/files/0/url",
+    "error": {
+      "type": "json_pointer",
+      "pointer": "/error"
+    }
+  }
+}
