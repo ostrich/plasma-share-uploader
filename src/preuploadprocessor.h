@@ -1,5 +1,7 @@
 #pragma once
 
+#include "targetpreuploadconfigparser.h"
+
 #include <QJsonObject>
 #include <QString>
 
@@ -12,4 +14,5 @@ struct Result {
 };
 
 Result preprocessFile(const QJsonObject &targetConfig, const QString &filePath);
+Result preprocessFile(const ParsedPreUploadConfig &config, const QString &filePath);
 }

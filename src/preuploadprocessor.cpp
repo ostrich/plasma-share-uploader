@@ -1,10 +1,10 @@
 #include "preuploadprocessor.h"
 
+#include "targetpreuploadconfigparser.h"
+
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QJsonArray>
-#include <QJsonValue>
 #include <QMimeDatabase>
 #include <QProcess>
 #include <QRegularExpression>
@@ -12,17 +12,6 @@
 
 namespace {
 constexpr int kDefaultPreUploadTimeoutMs = 30000;
-
-QJsonArray arrayValue(const QJsonObject &parent, const char *key)
-{
-    const QJsonValue value = parent.value(QLatin1StringView(key));
-    return value.isArray() ? value.toArray() : QJsonArray();
-}
-
-QString stringValue(const QJsonObject &parent, const char *key)
-{
-    return parent.value(QLatin1StringView(key)).toString();
-}
 
 bool mimeMatchesPattern(const QString &mimeType, const QString &pattern)
 {
@@ -95,43 +84,59 @@ QString runCommand(const QStringList &argv, int timeoutMs)
 
     return QString();
 }
+
+QString diagnosticsText(const QList<TargetDiagnostic> &diagnostics)
+{
+    QStringList lines;
+    lines.reserve(diagnostics.size());
+    for (const TargetDiagnostic &diagnostic : diagnostics) {
+        lines.append(diagnostic.displayText());
+    }
+    return lines.join(QLatin1Char('\n'));
+}
 }
 
 PreUploadProcessor::Result PreUploadProcessor::preprocessFile(const QJsonObject &targetConfig, const QString &filePath)
+{
+    QList<TargetDiagnostic> diagnostics;
+    ParsedPreUploadConfig parsed;
+    if (!TargetPreUploadConfigParser::parse(targetConfig, &parsed, &diagnostics)) {
+        Result result;
+        result.errorMessage = diagnosticsText(diagnostics);
+        return result;
+    }
+    return preprocessFile(parsed, filePath);
+}
+
+PreUploadProcessor::Result PreUploadProcessor::preprocessFile(const ParsedPreUploadConfig &config, const QString &filePath)
 {
     Result result;
     result.ok = true;
     result.uploadPath = filePath;
 
-    const QJsonArray preUploadRules = arrayValue(targetConfig, "preUpload");
-    if (preUploadRules.isEmpty()) {
+    if (config.rules.isEmpty()) {
         return result;
     }
 
     const QString mimeType = QMimeDatabase{}.mimeTypeForFile(filePath, QMimeDatabase::MatchContent).name();
 
-    QJsonObject selectedRule;
-    for (const QJsonValue &value : preUploadRules) {
-        if (!value.isObject()) {
-            continue;
-        }
-
-        const QJsonObject rule = value.toObject();
-        const QJsonArray mimePatterns = arrayValue(rule, "mime");
-        for (const QJsonValue &patternValue : mimePatterns) {
-            const QString pattern = patternValue.toString();
+    ParsedPreUploadRule selectedRule;
+    bool foundRule = false;
+    for (const ParsedPreUploadRule &rule : config.rules) {
+        for (const QString &pattern : rule.mimePatterns) {
             if (!pattern.isEmpty() && mimeMatchesPattern(mimeType, pattern)) {
                 selectedRule = rule;
+                foundRule = true;
                 break;
             }
         }
 
-        if (!selectedRule.isEmpty()) {
+        if (foundRule) {
             break;
         }
     }
 
-    if (selectedRule.isEmpty()) {
+    if (!foundRule) {
         return result;
     }
 
@@ -144,12 +149,11 @@ PreUploadProcessor::Result PreUploadProcessor::preprocessFile(const QJsonObject 
     tempDir.setAutoRemove(false);
 
     const QFileInfo fileInfo(filePath);
-    const QString fileHandling = stringValue(selectedRule, "fileHandling");
     result.tempDirPath = tempDir.path();
     const QString tempFilePath = QDir(result.tempDirPath).filePath(fileInfo.fileName());
     QString outFilePath;
 
-    if (fileHandling == QLatin1StringView("inplace_copy")) {
+    if (selectedRule.fileHandling == PreUploadFileHandling::InplaceCopy) {
         if (!QFile::copy(filePath, tempFilePath)) {
             result.ok = false;
             result.errorMessage = QStringLiteral("Failed to create temporary copy for %1").arg(filePath);
@@ -158,7 +162,7 @@ PreUploadProcessor::Result PreUploadProcessor::preprocessFile(const QJsonObject 
             return result;
         }
         result.uploadPath = tempFilePath;
-    } else if (fileHandling == QLatin1StringView("output_file")) {
+    } else if (selectedRule.fileHandling == PreUploadFileHandling::OutputFile) {
         outFilePath = QDir(result.tempDirPath).filePath(fileInfo.fileName());
     } else {
         result.ok = false;
@@ -168,16 +172,12 @@ PreUploadProcessor::Result PreUploadProcessor::preprocessFile(const QJsonObject 
         return result;
     }
 
-    const QJsonArray commands = arrayValue(selectedRule, "commands");
-    const int timeoutMs = selectedRule.value(QStringLiteral("timeoutMs")).toInt(kDefaultPreUploadTimeoutMs);
-    for (const QJsonValue &commandValue : commands) {
-        const QJsonObject command = commandValue.toObject();
-        const QJsonArray argvJson = arrayValue(command, "argv");
-
+    const int timeoutMs = selectedRule.timeoutMs > 0 ? selectedRule.timeoutMs : kDefaultPreUploadTimeoutMs;
+    for (const ParsedPreUploadCommand &command : selectedRule.commands) {
         QStringList argv;
-        argv.reserve(argvJson.size());
-        for (const QJsonValue &argValue : argvJson) {
-            argv.append(substituteCommandArg(argValue.toString(), result.uploadPath, outFilePath));
+        argv.reserve(command.argv.size());
+        for (const QString &arg : command.argv) {
+            argv.append(substituteCommandArg(arg, result.uploadPath, outFilePath));
         }
 
         const QString commandError = runCommand(argv, timeoutMs);
@@ -190,7 +190,7 @@ PreUploadProcessor::Result PreUploadProcessor::preprocessFile(const QJsonObject 
         }
     }
 
-    if (fileHandling == QLatin1StringView("output_file")) {
+    if (selectedRule.fileHandling == PreUploadFileHandling::OutputFile) {
         QFileInfo outInfo(outFilePath);
         if (!outInfo.exists() || !outInfo.isFile()) {
             result.ok = false;
