@@ -14,6 +14,7 @@ find_package(KF6Purpose REQUIRED)
 find_package(KF6Notifications REQUIRED)
 find_package(KDEInstallDirs QUIET)
 include(GNUInstallDirs)
+include(CTest)
 
 if (NOT KDE_INSTALL_QTPLUGINDIR)
     set(KDE_INSTALL_QTPLUGINDIR "${CMAKE_INSTALL_LIBDIR}/qt6/plugins")
@@ -37,3 +38,7 @@ endif()
 include("${IMSHARE_GENERATED_DIR}/targets.cmake")
 
 add_subdirectory(src)
+
+if (BUILD_TESTING)
+    add_subdirectory(tests)
+endif()

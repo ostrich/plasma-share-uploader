@@ -15,6 +15,17 @@ cmake -S . -B build
 cmake --build build
 ```
 
+## Test
+
+```sh
+cmake -S . -B build -DBUILD_TESTING=ON
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+The test suite includes Python generator tests and C++ integration tests that use a
+local in-process HTTP server. It does not contact external upload services.
+
 ## Install
 
 ```sh
