@@ -11,6 +11,7 @@ set(IMSHARE_CORE_SOURCES
     ${PROJECT_SOURCE_DIR}/src/targetcoreconfigparser.cpp
     ${PROJECT_SOURCE_DIR}/src/targetconfigvalidator.cpp
     ${PROJECT_SOURCE_DIR}/src/targetdefinition.cpp
+    ${PROJECT_SOURCE_DIR}/src/targeticonprovider.cpp
     ${PROJECT_SOURCE_DIR}/src/targetregistry.cpp
     ${PROJECT_SOURCE_DIR}/src/constraintmatcher.cpp
     ${PROJECT_SOURCE_DIR}/src/targetpickerdialog.cpp
@@ -50,6 +51,7 @@ function(imshare_add_cpp_test target)
     target_compile_definitions(${target} PRIVATE
         QT_NO_CAST_FROM_ASCII
         PLASMA_SHARE_UPLOADER_VERSION="${PROJECT_VERSION}"
+        PLASMA_SHARE_UPLOADER_SYSTEM_ICONS_PATH="${PROJECT_SOURCE_DIR}/data/icons"
         PLASMA_SHARE_UPLOADER_SYSTEM_TARGETS_PATH="${PROJECT_SOURCE_DIR}/data/targets.d"
         IMSHARE_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     )
@@ -117,6 +119,7 @@ imshare_add_cpp_test(imshare_sharejob_tests
     ${PROJECT_SOURCE_DIR}/src/targetresponseconfigparser.cpp
     ${PROJECT_SOURCE_DIR}/src/targetconfigvalidator.cpp
     ${PROJECT_SOURCE_DIR}/src/targetdefinition.cpp
+    ${PROJECT_SOURCE_DIR}/src/targeticonprovider.cpp
     ${PROJECT_SOURCE_DIR}/src/targetpickerdialog.cpp
     ${PROJECT_SOURCE_DIR}/src/targetregistry.cpp
     ${PROJECT_SOURCE_DIR}/src/targetuploader.cpp

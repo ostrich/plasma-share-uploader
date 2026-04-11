@@ -5,6 +5,8 @@
 
 #include <QDialog>
 
+class TargetIconProvider;
+
 class TargetPickerDialog final : public QDialog
 {
     Q_OBJECT
@@ -19,4 +21,5 @@ public:
 
 private:
     TargetDefinition m_selectedTarget;
+    TargetIconProvider *m_iconProvider = nullptr;
 };

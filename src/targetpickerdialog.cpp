@@ -1,5 +1,7 @@
 #include "targetpickerdialog.h"
 
+#include "targeticonprovider.h"
+
 #include <QCommandLinkButton>
 #include <QHBoxLayout>
 #include <QIcon>
@@ -19,6 +21,7 @@ TargetPickerDialog::TargetPickerDialog(const QList<TargetDefinition> &targets,
 {
     setWindowTitle(QStringLiteral("Upload..."));
     resize(460, 360);
+    m_iconProvider = new TargetIconProvider(this);
 
     auto *layout = new QVBoxLayout(this);
     auto *label = new QLabel(QStringLiteral("Choose an upload target:"), this);
@@ -32,7 +35,7 @@ TargetPickerDialog::TargetPickerDialog(const QList<TargetDefinition> &targets,
     QCommandLinkButton *firstButton = nullptr;
     for (const TargetDefinition &target : targets) {
         auto *button = new QCommandLinkButton(target.displayName(), target.description(), content);
-        button->setIcon(QIcon::fromTheme(target.icon()));
+        m_iconProvider->applyIcon(button, target);
         connect(button, &QCommandLinkButton::clicked, this, [this, target]() {
             m_selectedTarget = target;
             accept();

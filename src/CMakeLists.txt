@@ -8,6 +8,7 @@ set(IMSHARE_COMMON_SOURCES
     targetcoreconfigparser.cpp
     targetconfigvalidator.cpp
     targetdefinition.cpp
+    targeticonprovider.cpp
     targetpreuploadconfigparser.cpp
     targetrequestconfigparser.cpp
     targetresponseconfigparser.cpp
@@ -37,6 +38,7 @@ target_include_directories(runtimeuploadplugin PRIVATE
 target_compile_definitions(runtimeuploadplugin PRIVATE
     QT_NO_CAST_FROM_ASCII
     PLASMA_SHARE_UPLOADER_VERSION="${PROJECT_VERSION}"
+    PLASMA_SHARE_UPLOADER_SYSTEM_ICONS_PATH="${CMAKE_INSTALL_FULL_DATADIR}/plasma-share-uploader/icons"
     PLASMA_SHARE_UPLOADER_SYSTEM_TARGETS_PATH="${CMAKE_INSTALL_FULL_DATADIR}/plasma-share-uploader/targets.d"
 )
 
