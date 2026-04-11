@@ -1,6 +1,7 @@
 #include "targetconfigvalidator.h"
 
 #include "targetcoreconfigparser.h"
+#include "targetrequestconfigparser.h"
 
 #include <QJsonArray>
 #include <QRegularExpression>
@@ -602,13 +603,15 @@ bool validateResponse(const QString &targetId, const QJsonObject &response, QLis
 bool TargetConfigValidator::validateTarget(const QJsonObject &target, QList<TargetDiagnostic> *diagnostics)
 {
     ParsedTargetCoreConfig core;
-    if (!TargetCoreConfigParser::parse(target, &core, diagnostics)) {
+    const bool coreOk = TargetCoreConfigParser::parse(target, &core, diagnostics);
+    if (core.id.isEmpty()) {
         return false;
     }
 
     const QString targetId = core.id;
-    bool ok = true;
-    ok = validateRequest(targetId, objectValue(target, "request"), diagnostics) && ok;
+    bool ok = coreOk;
+    ParsedRequestConfig request;
+    ok = TargetRequestConfigParser::parse(target, &request, diagnostics) && ok;
     ok = validatePreUpload(targetId, target.value(QStringLiteral("preUpload")), diagnostics) && ok;
     ok = validateResponse(targetId, objectValue(target, "response"), diagnostics) && ok;
     return ok;

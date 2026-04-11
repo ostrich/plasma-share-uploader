@@ -1,5 +1,7 @@
 #include "targetuploader.h"
 
+#include "targetcoreconfigparser.h"
+#include "targetrequestconfigparser.h"
 #include "targetuploader_utils.h"
 
 #include <QBuffer>
@@ -33,15 +35,6 @@ UploadResponseInfo buildResponseInfo(QNetworkReply *reply, const QString &respon
 
     info.responseText = responseText;
     return info;
-}
-
-QByteArray createFormUrlencodedBody(const QJsonObject &fields, const QFileInfo &fileInfo)
-{
-    QUrlQuery query;
-    for (auto it = fields.begin(); it != fields.end(); ++it) {
-        query.addQueryItem(it.key(), TargetUploaderUtils::substituteRequestValue(it.value().toString(), fileInfo));
-    }
-    return query.toString(QUrl::FullyEncoded).toUtf8();
 }
 
 QByteArray createJsonBody(const QJsonObject &jsonConfig, const QFileInfo &fileInfo)
@@ -146,24 +139,28 @@ QJsonObject UploadResult::toJson() const
 }
 
 TargetUploader::TargetUploader(const QJsonObject &config)
-    : m_config(config)
 {
+    setConfig(config);
 }
 
 void TargetUploader::setConfig(const QJsonObject &config)
 {
     m_config = config;
+    QList<TargetDiagnostic> diagnostics;
+    m_coreConfig = {};
+    m_requestConfig = {};
+    TargetCoreConfigParser::parse(config, &m_coreConfig, &diagnostics);
+    m_requestConfigValid = TargetRequestConfigParser::parse(config, &m_requestConfig, &diagnostics);
 }
 
 QString TargetUploader::id() const
 {
-    return TargetUploaderUtils::stringValue(m_config, "id");
+    return m_coreConfig.id;
 }
 
 QString TargetUploader::displayName() const
 {
-    const QString name = TargetUploaderUtils::stringValue(m_config, "displayName");
-    return name.isEmpty() ? id() : name;
+    return m_coreConfig.displayName;
 }
 
 QNetworkReply *TargetUploader::upload(const QString &filePath, QNetworkAccessManager *manager)
@@ -177,17 +174,11 @@ QNetworkReply *TargetUploader::upload(const QString &filePath, QNetworkAccessMan
         return nullptr;
     }
 
-    const QJsonObject request = TargetUploaderUtils::objectValue(m_config, "request");
-    const QString urlTemplate = TargetUploaderUtils::stringValue(request, "url");
-    const QString method = TargetUploaderUtils::stringValue(request, "method").toUpper();
-    const QString requestType = TargetUploaderUtils::stringValue(request, "type").isEmpty()
-        ? QStringLiteral("multipart")
-        : TargetUploaderUtils::stringValue(request, "type");
-    if (urlTemplate.isEmpty() || method.isEmpty()) {
+    if (!m_requestConfigValid || m_requestConfig.url.isEmpty() || m_requestConfig.method.isEmpty()) {
         return nullptr;
     }
 
-    QNetworkRequest requestObj{TargetUploaderUtils::applyQueryParameters(urlTemplate, request, fileInfo)};
+    QNetworkRequest requestObj{TargetUploaderUtils::applyQueryParameters(m_requestConfig.url, m_requestConfig.query, fileInfo)};
     requestObj.setHeader(
         QNetworkRequest::UserAgentHeader,
         QStringLiteral("plasma-share-uploader/" PLASMA_SHARE_UPLOADER_VERSION));
@@ -196,23 +187,23 @@ QNetworkReply *TargetUploader::upload(const QString &filePath, QNetworkAccessMan
         == QLatin1StringView("redirect_url")) {
         requestObj.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
     }
-    TargetUploaderUtils::applyHeaders(request, fileInfo, requestObj);
+    TargetUploaderUtils::applyHeaders(m_requestConfig.headers, fileInfo, requestObj);
 
-    if (requestType == QLatin1StringView("raw")) {
+    if (m_requestConfig.type == RequestBodyType::Raw) {
         auto *file = new QFile(filePath);
         if (!file->open(QIODevice::ReadOnly)) {
             file->deleteLater();
             return nullptr;
         }
 
-        const QString contentType = TargetUploaderUtils::stringValue(request, "contentType");
         requestObj.setHeader(QNetworkRequest::ContentTypeHeader,
-                             contentType.isEmpty() ? QStringLiteral("application/octet-stream") : contentType);
+                             m_requestConfig.contentType.isEmpty() ? QStringLiteral("application/octet-stream")
+                                                                   : m_requestConfig.contentType);
 
         QNetworkReply *reply = nullptr;
-        if (method == QLatin1StringView("PUT")) {
+        if (m_requestConfig.method == QLatin1StringView("PUT")) {
             reply = manager->put(requestObj, file);
-        } else if (method == QLatin1StringView("POST")) {
+        } else if (m_requestConfig.method == QLatin1StringView("POST")) {
             reply = manager->post(requestObj, file);
         }
 
@@ -224,24 +215,20 @@ QNetworkReply *TargetUploader::upload(const QString &filePath, QNetworkAccessMan
         return reply;
     }
 
-    if (requestType == QLatin1StringView("multipart")) {
-        if (method != QLatin1StringView("POST")) {
+    if (m_requestConfig.type == RequestBodyType::Multipart) {
+        if (m_requestConfig.method != QLatin1StringView("POST")) {
             return nullptr;
         }
-
-        const QJsonObject multipart = TargetUploaderUtils::objectValue(request, "multipart");
-        const QString fileField = TargetUploaderUtils::stringValue(multipart, "fileField");
-        if (fileField.isEmpty()) {
+        if (m_requestConfig.fileField.isEmpty()) {
             return nullptr;
         }
 
         auto *multi = new QHttpMultiPart(QHttpMultiPart::FormDataType);
-        const QJsonObject fields = TargetUploaderUtils::fieldMap(multipart);
-        for (auto it = fields.begin(); it != fields.end(); ++it) {
+        for (auto it = m_requestConfig.multipartFields.begin(); it != m_requestConfig.multipartFields.end(); ++it) {
             QHttpPart fieldPart;
             const QString disposition = QStringLiteral("form-data; name=\"%1\"").arg(it.key());
             fieldPart.setHeader(QNetworkRequest::ContentDispositionHeader, disposition);
-            fieldPart.setBody(TargetUploaderUtils::substituteRequestValue(it.value().toString(), fileInfo).toUtf8());
+            fieldPart.setBody(TargetUploaderUtils::substituteRequestValue(it.value(), fileInfo).toUtf8());
             multi->append(fieldPart);
         }
 
@@ -254,7 +241,7 @@ QNetworkReply *TargetUploader::upload(const QString &filePath, QNetworkAccessMan
 
         QHttpPart filePart;
         const QString disposition = QStringLiteral("form-data; name=\"%1\"; filename=\"%2\"")
-                                       .arg(fileField, fileInfo.fileName());
+                                       .arg(m_requestConfig.fileField, fileInfo.fileName());
         filePart.setHeader(QNetworkRequest::ContentDispositionHeader, disposition);
         filePart.setBodyDevice(file);
         file->setParent(multi);
@@ -265,18 +252,17 @@ QNetworkReply *TargetUploader::upload(const QString &filePath, QNetworkAccessMan
         return reply;
     }
 
-    if (requestType == QLatin1StringView("form_urlencoded")) {
-        const QJsonObject formConfig = TargetUploaderUtils::objectValue(request, "formUrlencoded");
-        const QByteArray body = createFormUrlencodedBody(TargetUploaderUtils::fieldMap(formConfig), fileInfo);
+    if (m_requestConfig.type == RequestBodyType::FormUrlencoded) {
+        const QByteArray body = TargetUploaderUtils::createFormUrlencodedBody(m_requestConfig.formFields, fileInfo);
         auto *buffer = new QBuffer;
         buffer->setData(body);
         buffer->open(QIODevice::ReadOnly);
         requestObj.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/x-www-form-urlencoded"));
 
         QNetworkReply *reply = nullptr;
-        if (method == QLatin1StringView("POST")) {
+        if (m_requestConfig.method == QLatin1StringView("POST")) {
             reply = manager->post(requestObj, buffer);
-        } else if (method == QLatin1StringView("PUT")) {
+        } else if (m_requestConfig.method == QLatin1StringView("PUT")) {
             reply = manager->put(requestObj, buffer);
         }
         if (!reply) {
@@ -287,17 +273,17 @@ QNetworkReply *TargetUploader::upload(const QString &filePath, QNetworkAccessMan
         return reply;
     }
 
-    if (requestType == QLatin1StringView("json")) {
-        const QByteArray body = createJsonBody(TargetUploaderUtils::objectValue(request, "json"), fileInfo);
+    if (m_requestConfig.type == RequestBodyType::Json) {
+        const QByteArray body = createJsonBody(QJsonObject{{QStringLiteral("fields"), m_requestConfig.jsonFields}}, fileInfo);
         auto *buffer = new QBuffer;
         buffer->setData(body);
         buffer->open(QIODevice::ReadOnly);
         requestObj.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
 
         QNetworkReply *reply = nullptr;
-        if (method == QLatin1StringView("POST")) {
+        if (m_requestConfig.method == QLatin1StringView("POST")) {
             reply = manager->post(requestObj, buffer);
-        } else if (method == QLatin1StringView("PUT")) {
+        } else if (m_requestConfig.method == QLatin1StringView("PUT")) {
             reply = manager->put(requestObj, buffer);
         }
         if (!reply) {

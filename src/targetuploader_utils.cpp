@@ -2,6 +2,7 @@
 
 #include <QJsonArray>
 #include <QJsonValue>
+#include <QMap>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
 #include <QUrl>
@@ -73,6 +74,15 @@ QJsonObject TargetUploaderUtils::fieldMap(const QJsonObject &parent)
     return value.isObject() ? value.toObject() : QJsonObject();
 }
 
+void TargetUploaderUtils::applyHeaders(const QMap<QString, QString> &headers,
+                                       const QFileInfo &fileInfo,
+                                       QNetworkRequest &requestObj)
+{
+    for (auto it = headers.begin(); it != headers.end(); ++it) {
+        requestObj.setRawHeader(it.key().toUtf8(), substituteRequestValue(it.value(), fileInfo).toUtf8());
+    }
+}
+
 QString TargetUploaderUtils::substituteEnv(const QString &value)
 {
     static const QRegularExpression pattern(QStringLiteral(R"(\$\{ENV:([A-Za-z_][A-Za-z0-9_]*)\})"));
@@ -131,6 +141,28 @@ QUrl TargetUploaderUtils::applyQueryParameters(const QString &urlTemplate,
     }
     url.setQuery(query);
     return url;
+}
+
+QUrl TargetUploaderUtils::applyQueryParameters(const QString &urlTemplate,
+                                               const QMap<QString, QString> &queryItems,
+                                               const QFileInfo &fileInfo)
+{
+    QUrl url = QUrl::fromUserInput(applyUrlTemplate(urlTemplate, fileInfo));
+    QUrlQuery query(url);
+    for (auto it = queryItems.begin(); it != queryItems.end(); ++it) {
+        query.addQueryItem(it.key(), substituteRequestValue(it.value(), fileInfo));
+    }
+    url.setQuery(query);
+    return url;
+}
+
+QByteArray TargetUploaderUtils::createFormUrlencodedBody(const QMap<QString, QString> &fields, const QFileInfo &fileInfo)
+{
+    QUrlQuery query;
+    for (auto it = fields.begin(); it != fields.end(); ++it) {
+        query.addQueryItem(it.key(), substituteRequestValue(it.value(), fileInfo));
+    }
+    return query.toString(QUrl::FullyEncoded).toUtf8();
 }
 
 QJsonValue TargetUploaderUtils::substituteJsonValue(const QJsonValue &value, const QFileInfo &fileInfo)

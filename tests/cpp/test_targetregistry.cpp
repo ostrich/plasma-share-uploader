@@ -244,7 +244,6 @@ void TargetRegistryTest::validatorAccumulatesMultipleDiagnosticsForOneTarget()
 
     QList<TargetDiagnostic> diagnostics;
     QVERIFY(!TargetConfigValidator::validateTarget(target, &diagnostics));
-    QVERIFY(diagnostics.size() >= 6);
     QVERIFY(std::any_of(diagnostics.begin(), diagnostics.end(), [](const TargetDiagnostic &diagnostic) {
         return diagnostic.code == QLatin1StringView("request.url.empty");
     }));

@@ -1,5 +1,8 @@
 #pragma once
 
+#include "targetcoreconfigparser.h"
+#include "targetrequestconfigparser.h"
+
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -40,4 +43,7 @@ public:
 
 private:
     QJsonObject m_config;
+    ParsedTargetCoreConfig m_coreConfig;
+    ParsedRequestConfig m_requestConfig;
+    bool m_requestConfigValid = false;
 };

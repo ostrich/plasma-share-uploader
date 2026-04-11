@@ -7,6 +7,7 @@ set(IMSHARE_COMMON_SOURCES
     targetcoreconfigparser.cpp
     targetconfigvalidator.cpp
     targetdefinition.cpp
+    targetrequestconfigparser.cpp
     targetpickerdialog.cpp
     targetregistry.cpp
     targetuploader.cpp
