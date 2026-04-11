@@ -53,12 +53,25 @@ def camel_case(value: str) -> str:
     return "".join(p[:1].upper() + p[1:] for p in parts if p)
 
 
-def validate_target(target: dict) -> None:
+def validate_target_id(target: dict) -> str:
     target_id = target.get("id")
     if not target_id or not ID_RE.match(target_id):
         raise ValueError(f"Invalid target id: {target_id!r}")
+    return target_id
 
-    request = target.get("request")
+
+def validate_string_map(target_id: str, value, path: str) -> None:
+    if value is not None and not isinstance(value, dict):
+        raise ValueError(f"Target {target_id!r} {path} must be an object")
+    if isinstance(value, dict):
+        for name, entry in value.items():
+            if not isinstance(name, str) or not name:
+                raise ValueError(f"Target {target_id!r} {path} keys must be non-empty strings")
+            if not isinstance(entry, str):
+                raise ValueError(f"Target {target_id!r} {path} values must be strings")
+
+
+def validate_request(target_id: str, request) -> None:
     if not isinstance(request, dict):
         raise ValueError(f"Target {target_id!r} missing request object")
 
@@ -72,15 +85,7 @@ def validate_target(target: dict) -> None:
     if not isinstance(method, str) or not method:
         raise ValueError(f"Target {target_id!r} request.method must be a non-empty string")
 
-    headers = request.get("headers")
-    if headers is not None and not isinstance(headers, dict):
-        raise ValueError(f"Target {target_id!r} request.headers must be an object")
-    if isinstance(headers, dict):
-        for name, value in headers.items():
-            if not isinstance(name, str) or not name:
-                raise ValueError(f"Target {target_id!r} request.headers keys must be non-empty strings")
-            if not isinstance(value, str):
-                raise ValueError(f"Target {target_id!r} request.headers values must be strings")
+    validate_string_map(target_id, request.get("headers"), "request.headers")
 
     if request_type == "multipart":
         if method.upper() != "POST":
@@ -93,21 +98,51 @@ def validate_target(target: dict) -> None:
         if not isinstance(file_field, str) or not file_field:
             raise ValueError(f"Target {target_id!r} request.multipart.fileField must be a non-empty string")
 
-        fields = multipart.get("fields", {})
-        if not isinstance(fields, dict):
-            raise ValueError(f"Target {target_id!r} request.multipart.fields must be an object")
-        for name, value in fields.items():
-            if not isinstance(name, str) or not name:
-                raise ValueError(
-                    f"Target {target_id!r} request.multipart.fields keys must be non-empty strings"
-                )
-            if not isinstance(value, str):
-                raise ValueError(f"Target {target_id!r} request.multipart.fields values must be strings")
+        validate_string_map(target_id, multipart.get("fields", {}), "request.multipart.fields")
     else:
         if method.upper() not in {"POST", "PUT"}:
             raise ValueError(f"Target {target_id!r} request.method must be POST or PUT for raw")
 
-    pre_upload = target.get("preUpload")
+def validate_mime_pattern(rule_path: str, pattern) -> None:
+    if not isinstance(pattern, str) or not pattern:
+        raise ValueError(f"{rule_path}.mime must contain non-empty strings")
+    if pattern != "*/*" and not MIME_RE.match(pattern) and not MIME_WILDCARD_RE.match(pattern):
+        raise ValueError(f"{rule_path}.mime entries must be exact MIME types, type/*, or */*")
+    if pattern.startswith("*/") and pattern != "*/*":
+        raise ValueError(f"{rule_path}.mime entries must be exact MIME types, type/*, or */*")
+
+
+def validate_pre_upload_command(command_path: str, command, file_handling: str) -> bool:
+    if not isinstance(command, dict):
+        raise ValueError(f"{command_path} must be an object")
+
+    argv = command.get("argv")
+    if not isinstance(argv, list) or not argv:
+        raise ValueError(f"{command_path}.argv must be a non-empty list")
+
+    has_file = False
+    has_out_file = False
+    for arg in argv:
+        if not isinstance(arg, str) or not arg:
+            raise ValueError(f"{command_path}.argv must contain non-empty strings")
+        has_file = has_file or "${FILE}" in arg
+        has_out_file = has_out_file or "${OUT_FILE}" in arg
+        for placeholder in PLACEHOLDER_RE.findall(arg):
+            if placeholder not in {"FILE", "OUT_FILE"}:
+                raise ValueError(
+                    f"{command_path}.argv contains unsupported placeholder ${{{placeholder}}}"
+                )
+
+    if not has_file:
+        raise ValueError(f"{command_path}.argv must include ${{FILE}}")
+
+    if file_handling == "inplace_copy" and has_out_file:
+        raise ValueError(f"{command_path}.argv must not include ${{OUT_FILE}} for inplace_copy")
+
+    return has_out_file
+
+
+def validate_pre_upload(target_id: str, pre_upload) -> None:
     if pre_upload is not None and not isinstance(pre_upload, list):
         raise ValueError(f"Target {target_id!r} preUpload must be a list")
     if isinstance(pre_upload, list):
@@ -120,22 +155,11 @@ def validate_target(target: dict) -> None:
             if not isinstance(mime_patterns, list) or not mime_patterns:
                 raise ValueError(f"{rule_path}.mime must be a non-empty list")
             for pattern in mime_patterns:
-                if not isinstance(pattern, str) or not pattern:
-                    raise ValueError(f"{rule_path}.mime must contain non-empty strings")
-                if pattern != "*/*" and not MIME_RE.match(pattern) and not MIME_WILDCARD_RE.match(pattern):
-                    raise ValueError(
-                        f"{rule_path}.mime entries must be exact MIME types, type/*, or */*"
-                    )
-                if pattern.startswith("*/") and pattern != "*/*":
-                    raise ValueError(
-                        f"{rule_path}.mime entries must be exact MIME types, type/*, or */*"
-                    )
+                validate_mime_pattern(rule_path, pattern)
 
             file_handling = rule.get("fileHandling")
             if file_handling not in {"inplace_copy", "output_file"}:
-                raise ValueError(
-                    f"{rule_path}.fileHandling must be inplace_copy or output_file"
-                )
+                raise ValueError(f"{rule_path}.fileHandling must be inplace_copy or output_file")
 
             commands = rule.get("commands")
             if not isinstance(commands, list) or not commands:
@@ -146,35 +170,9 @@ def validate_target(target: dict) -> None:
             saw_out_file = False
             for command_index, command in enumerate(commands):
                 command_path = f"{rule_path}.commands[{command_index}]"
-                if not isinstance(command, dict):
-                    raise ValueError(f"{command_path} must be an object")
-
-                argv = command.get("argv")
-                if not isinstance(argv, list) or not argv:
-                    raise ValueError(f"{command_path}.argv must be a non-empty list")
-
-                has_file = False
-                command_has_out_file = False
-                for arg in argv:
-                    if not isinstance(arg, str) or not arg:
-                        raise ValueError(f"{command_path}.argv must contain non-empty strings")
-                    has_file = has_file or "${FILE}" in arg
-                    command_has_out_file = command_has_out_file or "${OUT_FILE}" in arg
-                    for placeholder in PLACEHOLDER_RE.findall(arg):
-                        if placeholder not in {"FILE", "OUT_FILE"}:
-                            raise ValueError(
-                                f"{command_path}.argv contains unsupported placeholder ${{{placeholder}}}"
-                            )
-
-                if not has_file:
-                    raise ValueError(f"{command_path}.argv must include ${{FILE}}")
-
-                if file_handling == "inplace_copy" and command_has_out_file:
-                    raise ValueError(
-                        f"{command_path}.argv must not include ${{OUT_FILE}} for inplace_copy"
-                    )
-
-                saw_out_file = saw_out_file or command_has_out_file
+                saw_out_file = saw_out_file or validate_pre_upload_command(
+                    command_path, command, file_handling
+                )
 
             if file_handling == "output_file" and not saw_out_file:
                 raise ValueError(f"{rule_path}.commands[0].argv must include ${{OUT_FILE}}")
@@ -183,7 +181,8 @@ def validate_target(target: dict) -> None:
             if timeout_ms is not None and (not isinstance(timeout_ms, int) or timeout_ms <= 0):
                 raise ValueError(f"{rule_path}.timeoutMs must be a positive integer")
 
-    response = target.get("response")
+
+def validate_response(target_id: str, response) -> None:
     if not isinstance(response, dict):
         raise ValueError(f"Target {target_id!r} missing response object")
 
@@ -206,6 +205,8 @@ def validate_target(target: dict) -> None:
         if not pointer.startswith("/"):
             raise ValueError(f"Target {target_id!r} response.pointer must start with '/'")
 
+
+def validate_optional_lists(target_id: str, target: dict) -> None:
     plugin_types = target.get("pluginTypes", ["ShareUrl"])
     if plugin_types is not None and not isinstance(plugin_types, list):
         raise ValueError(f"Target {target_id!r} pluginTypes must be a list")
@@ -213,6 +214,14 @@ def validate_target(target: dict) -> None:
     constraints = target.get("constraints", [])
     if constraints is not None and not isinstance(constraints, list):
         raise ValueError(f"Target {target_id!r} constraints must be a list")
+
+
+def validate_target(target: dict) -> None:
+    target_id = validate_target_id(target)
+    validate_request(target_id, target.get("request"))
+    validate_pre_upload(target_id, target.get("preUpload"))
+    validate_response(target_id, target.get("response"))
+    validate_optional_lists(target_id, target)
 
 
 def generate_target(target, out_dir: Path, version: str):
@@ -259,6 +268,27 @@ def generate_target(target, out_dir: Path, version: str):
     return target_id
 
 
+def load_targets(path: Path) -> list[dict]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    targets = data.get("targets", [])
+    if not targets:
+        raise ValueError("targets.json has no targets")
+    return targets
+
+
+def generate_targets(targets: list[dict], out_dir: Path, version: str) -> list[str]:
+    ids = []
+    for target in targets:
+        ids.append(generate_target(target, out_dir, version))
+    return ids
+
+
+def write_targets_cmake(ids: list[str], out_dir: Path) -> None:
+    cmake_path = out_dir / "targets.cmake"
+    ids_list = ";".join(ids)
+    cmake_path.write_text(f"set(IMSHARE_TARGET_IDS \"{ids_list}\")\n", encoding="utf-8")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
@@ -270,18 +300,9 @@ def main():
     out_dir = Path(args.output)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    data = json.loads(in_path.read_text(encoding="utf-8"))
-    targets = data.get("targets", [])
-    if not targets:
-        raise ValueError("targets.json has no targets")
-
-    ids = []
-    for target in targets:
-        ids.append(generate_target(target, out_dir, args.version))
-
-    cmake_path = out_dir / "targets.cmake"
-    ids_list = ";".join(ids)
-    cmake_path.write_text(f"set(IMSHARE_TARGET_IDS \"{ids_list}\")\n", encoding="utf-8")
+    targets = load_targets(in_path)
+    ids = generate_targets(targets, out_dir, args.version)
+    write_targets_cmake(ids, out_dir)
 
 
 if __name__ == "__main__":

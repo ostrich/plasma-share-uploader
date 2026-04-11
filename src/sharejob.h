@@ -1,5 +1,6 @@
 #pragma once
 
+#include "preuploadprocessor.h"
 #include "targetuploader.h"
 
 #include <Purpose/Job>
@@ -16,14 +17,7 @@ public:
     void start() override;
 
 private:
-    struct PreparedUpload {
-        bool ok = false;
-        QString uploadPath;
-        QString errorMessage;
-    };
-
     void startNextUpload();
-    PreparedUpload preprocessFile(const QString &filePath);
     void cleanupTempArtifacts();
     void finishError(const QString &message);
 

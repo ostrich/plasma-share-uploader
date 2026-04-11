@@ -1,6 +1,9 @@
 set(IMSHARE_COMMON_SOURCES
+    preuploadprocessor.cpp
     sharejob.cpp
+    shareinpututils.cpp
     targetuploader.cpp
+    targetuploader_utils.cpp
 )
 
 foreach(target_id IN LISTS IMSHARE_TARGET_IDS)
