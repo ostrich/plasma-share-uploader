@@ -40,6 +40,8 @@ target_compile_definitions(runtimeuploadplugin PRIVATE
     PLASMA_SHARE_UPLOADER_VERSION="${PROJECT_VERSION}"
     PLASMA_SHARE_UPLOADER_SYSTEM_ICONS_PATH="${CMAKE_INSTALL_FULL_DATADIR}/plasma-share-uploader/icons"
     PLASMA_SHARE_UPLOADER_SYSTEM_TARGETS_PATH="${CMAKE_INSTALL_FULL_DATADIR}/plasma-share-uploader/targets.d"
+    PLASMA_SHARE_UPLOADER_DEV_ICONS_PATH="${CMAKE_SOURCE_DIR}/data/icons"
+    PLASMA_SHARE_UPLOADER_DEV_TARGETS_PATH="${CMAKE_SOURCE_DIR}/data/targets.d"
 )
 
 set_target_properties(runtimeuploadplugin PROPERTIES

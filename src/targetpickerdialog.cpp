@@ -128,7 +128,7 @@ TargetPickerDialog::TargetPickerDialog(const QList<TargetDefinition> &targets,
         errorButton->setToolTip(QStringLiteral("Show target configuration errors"));
         connect(errorButton, &QPushButton::clicked, this, [this, details, errorCount]() {
             QMessageBox messageBox(this);
-            messageBox.setIcon(QMessageBox::Warning);
+            messageBox.setIconPixmap(QIcon::fromTheme(QStringLiteral("dialog-error")).pixmap(24, 24));
             messageBox.setWindowTitle(QStringLiteral("Target Configuration Errors"));
             messageBox.setText(errorCount == 1
                                    ? QStringLiteral("One target could not be loaded.")

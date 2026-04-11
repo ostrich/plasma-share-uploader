@@ -16,6 +16,11 @@
 namespace {
 constexpr int kButtonIconExtent = 36;
 
+QString defaultDevIconsPath()
+{
+    return QStringLiteral(PLASMA_SHARE_UPLOADER_DEV_ICONS_PATH);
+}
+
 QString defaultSystemIconsPath()
 {
     return QStringLiteral(PLASMA_SHARE_UPLOADER_SYSTEM_ICONS_PATH);
@@ -178,7 +183,16 @@ void TargetIconProvider::applyIcon(QLabel *label, const TargetDefinition &target
 
 QString TargetIconProvider::systemIconsPath() const
 {
-    return m_systemIconsPath.isEmpty() ? defaultSystemIconsPath() : m_systemIconsPath;
+    if (!m_systemIconsPath.isEmpty()) {
+        return m_systemIconsPath;
+    }
+
+    const QString devPath = defaultDevIconsPath();
+    if (QDir(devPath).exists()) {
+        return devPath;
+    }
+
+    return defaultSystemIconsPath();
 }
 
 QString TargetIconProvider::userIconsPath() const

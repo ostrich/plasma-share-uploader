@@ -10,6 +10,11 @@
 #include <QStandardPaths>
 
 namespace {
+QString defaultDevTargetsPath()
+{
+    return QStringLiteral(PLASMA_SHARE_UPLOADER_DEV_TARGETS_PATH);
+}
+
 QString defaultSystemTargetsPath()
 {
     return QStringLiteral(PLASMA_SHARE_UPLOADER_SYSTEM_TARGETS_PATH);
@@ -94,7 +99,16 @@ TargetRegistry::LoadResult TargetRegistry::loadTargets() const
 
 QString TargetRegistry::systemTargetsPath() const
 {
-    return m_systemPath.isEmpty() ? defaultSystemTargetsPath() : m_systemPath;
+    if (!m_systemPath.isEmpty()) {
+        return m_systemPath;
+    }
+
+    const QString devPath = defaultDevTargetsPath();
+    if (QDir(devPath).exists()) {
+        return devPath;
+    }
+
+    return defaultSystemTargetsPath();
 }
 
 QString TargetRegistry::userTargetsPath() const
