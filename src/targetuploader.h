@@ -17,6 +17,7 @@ class TargetUploader
 {
 public:
     explicit TargetUploader(const QJsonObject &config);
+    void setConfig(const QJsonObject &config);
 
     QString id() const;
     QString displayName() const;

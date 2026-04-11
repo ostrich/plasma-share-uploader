@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Test)
+find_package(Qt6 REQUIRED COMPONENTS Test Widgets)
 
 set(IMSHARE_TEST_SUPPORT_SOURCES
     cpp/httpcaptureserver.cpp
@@ -6,6 +6,11 @@ set(IMSHARE_TEST_SUPPORT_SOURCES
 
 set(IMSHARE_CORE_SOURCES
     ${PROJECT_SOURCE_DIR}/src/preuploadprocessor.cpp
+    ${PROJECT_SOURCE_DIR}/src/targetconfigvalidator.cpp
+    ${PROJECT_SOURCE_DIR}/src/targetdefinition.cpp
+    ${PROJECT_SOURCE_DIR}/src/targetregistry.cpp
+    ${PROJECT_SOURCE_DIR}/src/constraintmatcher.cpp
+    ${PROJECT_SOURCE_DIR}/src/targetpickerdialog.cpp
     ${PROJECT_SOURCE_DIR}/src/shareinpututils.cpp
     ${PROJECT_SOURCE_DIR}/src/sharejob.cpp
     ${PROJECT_SOURCE_DIR}/src/targetuploader.cpp
@@ -26,6 +31,7 @@ function(imshare_add_cpp_test target)
         Qt6::Gui
         Qt6::Network
         Qt6::Test
+        Qt6::Widgets
         KF6::CoreAddons
         KF6::Purpose
         KF6::Notifications
@@ -38,6 +44,7 @@ function(imshare_add_cpp_test target)
     target_compile_definitions(${target} PRIVATE
         QT_NO_CAST_FROM_ASCII
         PLASMA_SHARE_UPLOADER_VERSION="${PROJECT_VERSION}"
+        PLASMA_SHARE_UPLOADER_SYSTEM_TARGETS_PATH="${PROJECT_SOURCE_DIR}/data/targets.json"
         IMSHARE_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     )
     add_test(NAME ${target} COMMAND ${target})
@@ -68,20 +75,24 @@ imshare_add_cpp_test(imshare_targetuploader_tests
     ${PROJECT_SOURCE_DIR}/src/targetuploader_utils.cpp
 )
 
+imshare_add_cpp_test(imshare_targetregistry_tests
+    cpp/test_targetregistry.cpp
+    ${PROJECT_SOURCE_DIR}/src/constraintmatcher.cpp
+    ${PROJECT_SOURCE_DIR}/src/targetconfigvalidator.cpp
+    ${PROJECT_SOURCE_DIR}/src/targetdefinition.cpp
+    ${PROJECT_SOURCE_DIR}/src/targetregistry.cpp
+)
+
 imshare_add_cpp_test(imshare_sharejob_tests
     cpp/test_sharejob.cpp
+    ${PROJECT_SOURCE_DIR}/src/constraintmatcher.cpp
     ${PROJECT_SOURCE_DIR}/src/sharejob.cpp
     ${PROJECT_SOURCE_DIR}/src/shareinpututils.cpp
     ${PROJECT_SOURCE_DIR}/src/preuploadprocessor.cpp
+    ${PROJECT_SOURCE_DIR}/src/targetconfigvalidator.cpp
+    ${PROJECT_SOURCE_DIR}/src/targetdefinition.cpp
+    ${PROJECT_SOURCE_DIR}/src/targetpickerdialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/targetregistry.cpp
     ${PROJECT_SOURCE_DIR}/src/targetuploader.cpp
     ${PROJECT_SOURCE_DIR}/src/targetuploader_utils.cpp
-)
-
-add_test(
-    NAME imshare_python_tests
-    COMMAND ${Python3_EXECUTABLE} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/python
-)
-set_tests_properties(imshare_python_tests PROPERTIES
-    ENVIRONMENT "PYTHONPATH=${PROJECT_SOURCE_DIR}"
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
 )

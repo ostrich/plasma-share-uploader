@@ -1,8 +1,12 @@
 #include "sharejob.h"
 
+#include "constraintmatcher.h"
 #include "shareinpututils.h"
+#include "targetpickerdialog.h"
+#include "targetregistry.h"
 
 #include <KNotification>
+#include <QApplication>
 #include <QClipboard>
 #include <QDir>
 #include <QGuiApplication>
@@ -24,6 +28,14 @@ void ShareJob::start()
     if (m_files.isEmpty()) {
         finishError(QStringLiteral("No local files found to upload."));
         return;
+    }
+
+    if (m_targetConfig.isEmpty()) {
+        if (!ensureTargetSelected()) {
+            return;
+        }
+    } else {
+        m_uploader.setConfig(m_targetConfig);
     }
 
     if (m_targetConfig.isEmpty()) {
@@ -120,4 +132,38 @@ void ShareJob::cleanupTempArtifacts()
         QDir(path).removeRecursively();
     }
     m_tempDirs.clear();
+}
+
+bool ShareJob::ensureTargetSelected()
+{
+    TargetRegistry registry;
+    const TargetRegistry::LoadResult loadResult = registry.loadTargets();
+    const QList<TargetDefinition> compatibleTargets = ConstraintMatcher::filterTargets(loadResult.targets, m_files);
+
+    if (compatibleTargets.isEmpty()) {
+        QString message = QStringLiteral("No compatible upload targets available.");
+        if (!loadResult.errors.isEmpty()) {
+            message.append(QStringLiteral("\n\n"));
+            message.append(loadResult.errors.join(QLatin1Char('\n')));
+        }
+        finishError(message);
+        return false;
+    }
+
+    QWidget *parentWidget = QApplication::activeWindow();
+    TargetPickerDialog dialog(compatibleTargets, parentWidget);
+    if (dialog.exec() != QDialog::Accepted) {
+        finishError(QStringLiteral("Upload cancelled."));
+        return false;
+    }
+
+    const TargetDefinition selectedTarget = dialog.selectedTarget();
+    if (selectedTarget.config.isEmpty()) {
+        finishError(QStringLiteral("No upload target selected."));
+        return false;
+    }
+
+    m_targetConfig = selectedTarget.config;
+    m_uploader.setConfig(m_targetConfig);
+    return true;
 }

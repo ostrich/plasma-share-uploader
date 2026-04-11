@@ -1,41 +1,48 @@
 set(IMSHARE_COMMON_SOURCES
+    constraintmatcher.cpp
     preuploadprocessor.cpp
+    runtimeplugin.cpp
     sharejob.cpp
     shareinpututils.cpp
+    targetconfigvalidator.cpp
+    targetdefinition.cpp
+    targetpickerdialog.cpp
+    targetregistry.cpp
     targetuploader.cpp
     targetuploader_utils.cpp
 )
 
-foreach(target_id IN LISTS IMSHARE_TARGET_IDS)
-    set(target_plugin "${target_id}plugin")
-    add_library(${target_plugin} MODULE
-        ${IMSHARE_COMMON_SOURCES}
-        "${IMSHARE_GENERATED_DIR}/${target_id}plugin.cpp"
-    )
+add_library(runtimeuploadplugin MODULE ${IMSHARE_COMMON_SOURCES})
 
-    target_link_libraries(${target_plugin}
-        Qt6::Core
-        Qt6::Gui
-        Qt6::Network
-        KF6::CoreAddons
-        KF6::Purpose
-        KF6::Notifications
-    )
+target_link_libraries(runtimeuploadplugin
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Network
+    Qt6::Widgets
+    KF6::CoreAddons
+    KF6::Purpose
+    KF6::Notifications
+)
 
-    target_include_directories(${target_plugin} PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${IMSHARE_GENERATED_DIR}
-    )
+target_include_directories(runtimeuploadplugin PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
 
-    target_compile_definitions(${target_plugin} PRIVATE QT_NO_CAST_FROM_ASCII)
-    target_compile_definitions(${target_plugin} PRIVATE PLASMA_SHARE_UPLOADER_VERSION="${PROJECT_VERSION}")
+target_compile_definitions(runtimeuploadplugin PRIVATE
+    QT_NO_CAST_FROM_ASCII
+    PLASMA_SHARE_UPLOADER_VERSION="${PROJECT_VERSION}"
+    PLASMA_SHARE_UPLOADER_SYSTEM_TARGETS_PATH="${CMAKE_INSTALL_FULL_DATADIR}/plasma-share-uploader/targets.json"
+)
 
-    set_target_properties(${target_plugin} PROPERTIES
-        OUTPUT_NAME "${target_id}plugin"
-        PREFIX ""
-    )
+set_target_properties(runtimeuploadplugin PROPERTIES
+    OUTPUT_NAME "runtimeuploadplugin"
+    PREFIX ""
+)
 
-    install(TARGETS ${target_plugin}
-        DESTINATION ${KDE_INSTALL_QTPLUGINDIR}/kf6/purpose
-    )
-endforeach()
+install(TARGETS runtimeuploadplugin
+    DESTINATION ${KDE_INSTALL_QTPLUGINDIR}/kf6/purpose
+)
+
+install(FILES ${CMAKE_SOURCE_DIR}/data/targets.json
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/plasma-share-uploader
+)

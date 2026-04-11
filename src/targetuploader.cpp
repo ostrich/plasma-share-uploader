@@ -16,6 +16,16 @@ constexpr int kUploadTimeoutMs = 30000;
 TargetUploader::TargetUploader(const QJsonObject &config)
     : m_config(config)
 {
+    setConfig(config);
+}
+
+void TargetUploader::setConfig(const QJsonObject &config)
+{
+    m_config = config;
+    m_responseRegex = QRegularExpression{};
+    m_responseGroup = 1;
+    m_jsonPointer.clear();
+
     const QJsonObject response = TargetUploaderUtils::objectValue(m_config, "response");
     if (response.value(QLatin1StringView("type")).toString() == QLatin1StringView("regex")) {
         const QString pattern = response.value(QLatin1StringView("pattern")).toString();

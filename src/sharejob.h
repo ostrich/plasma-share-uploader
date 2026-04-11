@@ -1,6 +1,7 @@
 #pragma once
 
 #include "preuploadprocessor.h"
+#include "targetdefinition.h"
 #include "targetuploader.h"
 
 #include <Purpose/Job>
@@ -18,6 +19,7 @@ public:
 
 private:
     void startNextUpload();
+    bool ensureTargetSelected();
     void cleanupTempArtifacts();
     void finishError(const QString &message);
 

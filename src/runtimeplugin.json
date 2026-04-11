@@ -1,0 +1,11 @@
+{
+  "KPlugin": {
+    "Name": "Upload...",
+    "Description": "Choose an upload target at runtime",
+    "Icon": "image-x-generic",
+    "License": "GPL-3.0-or-later",
+    "Version": "0.1.0"
+  },
+  "X-Purpose-ActionDisplay": "Upload...",
+  "X-Purpose-PluginTypes": ["ShareUrl", "Export"]
+}
