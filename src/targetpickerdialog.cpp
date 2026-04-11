@@ -13,7 +13,7 @@
 #include <QWidget>
 
 namespace {
-constexpr int kIconEdgePadding = 12;
+constexpr int kIconEdgePadding = 9;
 constexpr int kIconTextGap = 12;
 constexpr int kButtonVerticalPadding = 8;
 constexpr int kIconExtent = 36;
