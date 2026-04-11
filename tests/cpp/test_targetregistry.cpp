@@ -17,6 +17,7 @@ class TargetRegistryTest final : public QObject
 private slots:
     void loadsBundledSystemTargets();
     void exampleTargetFilesValidate();
+    void defaultUserTargetsPathIsStable();
     void userTargetsOverrideSystemTargetsById();
     void invalidTargetsProduceErrorsButDoNotBlockValidTargets();
     void constraintMatcherFiltersByMimeType();
@@ -51,6 +52,14 @@ void TargetRegistryTest::exampleTargetFilesValidate()
         QStringList errors;
         QVERIFY2(TargetConfigValidator::validateTarget(doc.object(), &errors), qPrintable(fileName + QStringLiteral(": ") + errors.join(QStringLiteral("; "))));
     }
+}
+
+void TargetRegistryTest::defaultUserTargetsPathIsStable()
+{
+    TargetRegistry registry;
+    QCOMPARE(registry.userTargetsPath(),
+             QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
+                 + QStringLiteral("/plasma-share-uploader/targets.d"));
 }
 
 void TargetRegistryTest::userTargetsOverrideSystemTargetsById()

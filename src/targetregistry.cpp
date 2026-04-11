@@ -17,7 +17,8 @@ QString defaultSystemTargetsPath()
 
 QString defaultUserTargetsPath()
 {
-    return QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + QStringLiteral("/targets.d");
+    return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
+        + QStringLiteral("/plasma-share-uploader/targets.d");
 }
 
 void loadTargetFile(const QString &path, QMap<QString, TargetDefinition> &targets, QStringList &errors)
