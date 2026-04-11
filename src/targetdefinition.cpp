@@ -2,30 +2,30 @@
 
 QString TargetDefinition::id() const
 {
-    return core.id;
+    return target.core.id;
 }
 
 QString TargetDefinition::displayName() const
 {
-    return core.displayName;
+    return target.core.displayName;
 }
 
 QString TargetDefinition::description() const
 {
-    return core.description;
+    return target.core.description;
 }
 
 QString TargetDefinition::icon() const
 {
-    return core.icon;
+    return target.core.icon;
 }
 
 QStringList TargetDefinition::constraints() const
 {
-    return core.constraints;
+    return target.core.constraints;
 }
 
 QStringList TargetDefinition::extensions() const
 {
-    return core.extensions;
+    return target.core.extensions;
 }

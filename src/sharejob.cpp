@@ -2,6 +2,7 @@
 
 #include "constraintmatcher.h"
 #include "shareinpututils.h"
+#include "targetconfigparser.h"
 #include "targetpickerdialog.h"
 #include "targetregistry.h"
 
@@ -30,9 +31,14 @@ QString diagnosticsText(const QList<TargetDiagnostic> &diagnostics)
 
 ShareJob::ShareJob(const QByteArray &configJson, QObject *parent)
     : Purpose::Job(parent)
-    , m_targetConfig(QJsonDocument::fromJson(configJson).object())
-    , m_uploader(m_targetConfig)
+    , m_uploader()
 {
+    const QJsonObject configObject = QJsonDocument::fromJson(configJson).object();
+    if (!configObject.isEmpty()) {
+        QList<TargetDiagnostic> diagnostics;
+        TargetConfigParser::parse(configObject, &m_targetConfig, &diagnostics);
+        m_uploader.setConfig(m_targetConfig);
+    }
 }
 
 void ShareJob::start()
@@ -43,7 +49,7 @@ void ShareJob::start()
         return;
     }
 
-    if (m_targetConfig.isEmpty()) {
+    if (m_targetConfig.core.id.isEmpty()) {
         if (!ensureTargetSelected()) {
             return;
         }
@@ -51,7 +57,7 @@ void ShareJob::start()
         m_uploader.setConfig(m_targetConfig);
     }
 
-    if (m_targetConfig.isEmpty()) {
+    if (m_targetConfig.core.id.isEmpty()) {
         finishError(QStringLiteral("Missing upload target configuration."));
         return;
     }
@@ -111,7 +117,7 @@ void ShareJob::startNextUpload()
     }
 
     const QString originalPath = m_files.at(m_nextIndex);
-    const PreUploadProcessor::Result prepared = PreUploadProcessor::preprocessFile(m_targetConfig, originalPath);
+    const PreUploadProcessor::Result prepared = PreUploadProcessor::preprocessFile(m_targetConfig.preUpload, originalPath);
     if (!prepared.ok) {
         finishError(prepared.errorMessage);
         return;
@@ -199,12 +205,12 @@ bool ShareJob::ensureTargetSelected()
     }
 
     const TargetDefinition selectedTarget = dialog.selectedTarget();
-    if (selectedTarget.config.isEmpty()) {
+    if (selectedTarget.id().isEmpty()) {
         finishError(QStringLiteral("No upload target selected."));
         return false;
     }
 
-    m_targetConfig = selectedTarget.config;
+    m_targetConfig = selectedTarget.target;
     m_uploader.setConfig(m_targetConfig);
     return true;
 }

@@ -1,7 +1,6 @@
 #include "targetregistry.h"
 
-#include "targetcoreconfigparser.h"
-#include "targetconfigvalidator.h"
+#include "targetconfigparser.h"
 
 #include <QDir>
 #include <QFile>
@@ -46,18 +45,13 @@ void loadTargetFile(const QString &path, QMap<QString, TargetDefinition> &target
     }
 
     const QJsonObject targetObject = doc.object();
+    TargetDefinition definition;
     QList<TargetDiagnostic> fileDiagnostics;
-    if (!TargetConfigValidator::validateTarget(targetObject, &fileDiagnostics)) {
+    if (!TargetConfigParser::parse(targetObject, &definition.target, &fileDiagnostics)) {
         for (TargetDiagnostic &diagnostic : fileDiagnostics) {
             diagnostic.filePath = path;
             diagnostics.append(diagnostic);
         }
-        return;
-    }
-
-    TargetDefinition definition;
-    definition.config = targetObject;
-    if (!TargetCoreConfigParser::parse(targetObject, &definition.core)) {
         return;
     }
     targets.insert(definition.id(), definition);

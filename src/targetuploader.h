@@ -1,8 +1,6 @@
 #pragma once
 
-#include "targetcoreconfigparser.h"
-#include "targetrequestconfigparser.h"
-#include "targetresponseconfigparser.h"
+#include "targetconfigparser.h"
 
 #include <QJsonObject>
 #include <QNetworkAccessManager>
@@ -33,8 +31,11 @@ struct UploadResult {
 class TargetUploader
 {
 public:
+    TargetUploader() = default;
     explicit TargetUploader(const QJsonObject &config);
+    explicit TargetUploader(const ParsedTargetConfig &config);
     void setConfig(const QJsonObject &config);
+    void setConfig(const ParsedTargetConfig &config);
 
     QString id() const;
     QString displayName() const;
@@ -43,10 +44,7 @@ public:
     UploadResult parseReply(QNetworkReply *reply) const;
 
 private:
-    QJsonObject m_config;
-    ParsedTargetCoreConfig m_coreConfig;
-    ParsedRequestConfig m_requestConfig;
-    ParsedResponseConfig m_responseConfig;
+    ParsedTargetConfig m_targetConfig;
     bool m_requestConfigValid = false;
     bool m_responseConfigValid = false;
 };

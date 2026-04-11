@@ -1,11 +1,11 @@
 #pragma once
 
 #include "preuploadprocessor.h"
+#include "targetconfigparser.h"
 #include "targetdefinition.h"
 #include "targetuploader.h"
 
 #include <Purpose/Job>
-#include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QStringList>
 
@@ -23,7 +23,7 @@ private:
     void cleanupTempArtifacts();
     void finishError(const QString &message);
 
-    QJsonObject m_targetConfig;
+    ParsedTargetConfig m_targetConfig;
     TargetUploader m_uploader;
     QStringList m_files;
     QList<UploadResult> m_uploadResults;

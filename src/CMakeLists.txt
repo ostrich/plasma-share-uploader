@@ -4,6 +4,7 @@ set(IMSHARE_COMMON_SOURCES
     runtimeplugin.cpp
     sharejob.cpp
     shareinpututils.cpp
+    targetconfigparser.cpp
     targetcoreconfigparser.cpp
     targetconfigvalidator.cpp
     targetdefinition.cpp

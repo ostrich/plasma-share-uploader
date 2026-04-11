@@ -1,5 +1,4 @@
 #include "constraintmatcher.h"
-#include "targetcoreconfigparser.h"
 #include "targetconfigvalidator.h"
 #include "targetdiagnostic.h"
 #include "targetregistry.h"
@@ -271,14 +270,13 @@ void TargetRegistryTest::constraintMatcherFiltersByMimeType()
     const QString textPath = writeTempFile(dir, QStringLiteral("file.txt"), "hello");
 
     TargetDefinition imageTarget;
-    imageTarget.config = QJsonObject{
-        {QStringLiteral("id"), QStringLiteral("images")},
-        {QStringLiteral("constraints"), QJsonArray{QStringLiteral("mimeType:image/*")}}};
-    QVERIFY(TargetCoreConfigParser::parse(imageTarget.config, &imageTarget.core));
+    imageTarget.target.core.id = QStringLiteral("images");
+    imageTarget.target.core.constraints = QStringList{QStringLiteral("mimeType:image/*")};
+    imageTarget.target.valid = true;
 
     TargetDefinition anyTarget;
-    anyTarget.config = QJsonObject{{QStringLiteral("id"), QStringLiteral("any")}};
-    QVERIFY(TargetCoreConfigParser::parse(anyTarget.config, &anyTarget.core));
+    anyTarget.target.core.id = QStringLiteral("any");
+    anyTarget.target.valid = true;
 
     QVERIFY(ConstraintMatcher::targetMatchesFiles(imageTarget, QStringList{imagePath}));
     QVERIFY(!ConstraintMatcher::targetMatchesFiles(imageTarget, QStringList{textPath}));
@@ -296,10 +294,9 @@ void TargetRegistryTest::constraintMatcherFiltersByExtension()
     const QString textPath = writeTempFile(dir, QStringLiteral("notes.txt"), "text");
 
     TargetDefinition imageTarget;
-    imageTarget.config = QJsonObject{
-        {QStringLiteral("id"), QStringLiteral("images")},
-        {QStringLiteral("extensions"), QJsonArray{QStringLiteral("png"), QStringLiteral(".jpeg")}}};
-    QVERIFY(TargetCoreConfigParser::parse(imageTarget.config, &imageTarget.core));
+    imageTarget.target.core.id = QStringLiteral("images");
+    imageTarget.target.core.extensions = QStringList{QStringLiteral("png"), QStringLiteral(".jpeg")};
+    imageTarget.target.valid = true;
 
     QVERIFY(ConstraintMatcher::targetMatchesFiles(imageTarget, QStringList{imagePath}));
     QVERIFY(!ConstraintMatcher::targetMatchesFiles(imageTarget, QStringList{textPath}));
