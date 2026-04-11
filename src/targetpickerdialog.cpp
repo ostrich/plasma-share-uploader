@@ -35,6 +35,7 @@ TargetPickerDialog::TargetPickerDialog(const QList<TargetDefinition> &targets,
     QCommandLinkButton *firstButton = nullptr;
     for (const TargetDefinition &target : targets) {
         auto *button = new QCommandLinkButton(target.displayName(), target.description(), content);
+        button->setStyleSheet(QStringLiteral("QCommandLinkButton { padding: 8px 12px; }"));
         m_iconProvider->applyIcon(button, target);
         connect(button, &QCommandLinkButton::clicked, this, [this, target]() {
             m_selectedTarget = target;

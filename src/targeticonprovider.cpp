@@ -6,6 +6,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QIcon>
+#include <QPainter>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QPixmap>
@@ -13,6 +14,8 @@
 #include <QUrl>
 
 namespace {
+constexpr int kButtonIconExtent = 36;
+
 QString defaultSystemIconsPath()
 {
     return QStringLiteral(PLASMA_SHARE_UPLOADER_SYSTEM_ICONS_PATH);
@@ -99,7 +102,18 @@ bool loadButtonIcon(QAbstractButton *button, const QString &path)
     if (pixmap.isNull()) {
         return false;
     }
-    button->setIcon(QIcon(pixmap));
+    const QSize targetSize(kButtonIconExtent, kButtonIconExtent);
+    const QPixmap scaled = pixmap.scaled(targetSize, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+
+    QPixmap normalized(targetSize);
+    normalized.fill(Qt::transparent);
+    QPainter painter(&normalized);
+    const int x = (scaled.width() - targetSize.width()) / 2;
+    const int y = (scaled.height() - targetSize.height()) / 2;
+    painter.drawPixmap(0, 0, scaled, x, y, targetSize.width(), targetSize.height());
+    painter.end();
+
+    button->setIcon(QIcon(normalized));
     return true;
 }
 }
@@ -121,7 +135,7 @@ void TargetIconProvider::applyIcon(QAbstractButton *button, const TargetDefiniti
         return;
     }
 
-    button->setIconSize(QSize(24, 24));
+    button->setIconSize(QSize(kButtonIconExtent, kButtonIconExtent));
 
     const QString iconName = target.icon();
     const QString resolvedLocalPath = localIconPath(iconName, userIconsPath(), systemIconsPath());
@@ -223,7 +237,17 @@ void TargetIconProvider::applyCachedIcon(const QString &cachePath, const QString
         return;
     }
 
-    const QIcon icon(pixmap);
+    const QSize targetSize(kButtonIconExtent, kButtonIconExtent);
+    const QPixmap scaled = pixmap.scaled(targetSize, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+    QPixmap normalized(targetSize);
+    normalized.fill(Qt::transparent);
+    QPainter painter(&normalized);
+    const int x = (scaled.width() - targetSize.width()) / 2;
+    const int y = (scaled.height() - targetSize.height()) / 2;
+    painter.drawPixmap(0, 0, scaled, x, y, targetSize.width(), targetSize.height());
+    painter.end();
+
+    const QIcon icon(normalized);
     const QList<QPointer<QAbstractButton>> buttons = m_pendingButtons.take(cacheKey);
     for (const QPointer<QAbstractButton> &button : buttons) {
         if (button) {
