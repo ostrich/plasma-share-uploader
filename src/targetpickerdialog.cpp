@@ -2,7 +2,6 @@
 
 #include "targeticonprovider.h"
 
-#include <QCommandLinkButton>
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
@@ -11,6 +10,63 @@
 #include <QScrollArea>
 #include <QVBoxLayout>
 #include <QWidget>
+
+namespace {
+constexpr int kIconEdgePadding = 12;
+constexpr int kIconTextGap = 12;
+constexpr int kButtonVerticalPadding = 8;
+constexpr int kIconExtent = 36;
+
+class TargetPickerButton final : public QPushButton
+{
+public:
+    explicit TargetPickerButton(const TargetDefinition &target, QWidget *parent = nullptr)
+        : QPushButton(parent)
+    {
+        setCursor(Qt::PointingHandCursor);
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+        setStyleSheet(QStringLiteral(
+            "QPushButton { text-align: left; padding: 0; }"
+            "QPushButton:focus { outline: none; }"));
+
+        auto *layout = new QHBoxLayout(this);
+        layout->setContentsMargins(kIconEdgePadding, kButtonVerticalPadding, kIconEdgePadding, kButtonVerticalPadding);
+        layout->setSpacing(kIconTextGap);
+
+        m_iconLabel = new QLabel(this);
+        m_iconLabel->setFixedSize(kIconExtent, kIconExtent);
+        m_iconLabel->setAlignment(Qt::AlignCenter);
+        layout->addWidget(m_iconLabel, 0, Qt::AlignTop);
+
+        auto *textLayout = new QVBoxLayout();
+        textLayout->setContentsMargins(0, 0, 0, 0);
+        textLayout->setSpacing(2);
+
+        auto *titleLabel = new QLabel(target.displayName(), this);
+        QFont titleFont = titleLabel->font();
+        titleFont.setBold(true);
+        titleLabel->setFont(titleFont);
+        titleLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+        textLayout->addWidget(titleLabel);
+
+        auto *descriptionLabel = new QLabel(target.description(), this);
+        descriptionLabel->setWordWrap(true);
+        descriptionLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+        descriptionLabel->setStyleSheet(QStringLiteral("color: palette(mid);"));
+        textLayout->addWidget(descriptionLabel);
+
+        layout->addLayout(textLayout, 1);
+    }
+
+    QLabel *iconLabel() const
+    {
+        return m_iconLabel;
+    }
+
+private:
+    QLabel *m_iconLabel = nullptr;
+};
+}
 
 TargetPickerDialog::TargetPickerDialog(const QList<TargetDefinition> &targets,
                                        const QList<TargetDiagnostic> &diagnostics,
@@ -32,12 +88,11 @@ TargetPickerDialog::TargetPickerDialog(const QList<TargetDefinition> &targets,
     auto *content = new QWidget(scrollArea);
     auto *contentLayout = new QVBoxLayout(content);
 
-    QCommandLinkButton *firstButton = nullptr;
+    QPushButton *firstButton = nullptr;
     for (const TargetDefinition &target : targets) {
-        auto *button = new QCommandLinkButton(target.displayName(), target.description(), content);
-        button->setStyleSheet(QStringLiteral("QCommandLinkButton { padding: 8px 12px; }"));
-        m_iconProvider->applyIcon(button, target);
-        connect(button, &QCommandLinkButton::clicked, this, [this, target]() {
+        auto *button = new TargetPickerButton(target, content);
+        m_iconProvider->applyIcon(button->iconLabel(), target);
+        connect(button, &QPushButton::clicked, this, [this, target]() {
             m_selectedTarget = target;
             accept();
         });

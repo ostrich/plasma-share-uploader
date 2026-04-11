@@ -1,11 +1,11 @@
 #include "targeticonprovider.h"
 
-#include <QAbstractButton>
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QIcon>
+#include <QLabel>
 #include <QPainter>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -96,25 +96,10 @@ QString cacheSuffixForUrl(const QUrl &url)
     return QStringLiteral("ico");
 }
 
-bool loadButtonIcon(QAbstractButton *button, const QString &path)
+QPixmap loadLabelPixmap(const QString &path)
 {
     QPixmap pixmap(path);
-    if (pixmap.isNull()) {
-        return false;
-    }
-    const QSize targetSize(kButtonIconExtent, kButtonIconExtent);
-    const QPixmap scaled = pixmap.scaled(targetSize, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
-
-    QPixmap normalized(targetSize);
-    normalized.fill(Qt::transparent);
-    QPainter painter(&normalized);
-    const int x = (scaled.width() - targetSize.width()) / 2;
-    const int y = (scaled.height() - targetSize.height()) / 2;
-    painter.drawPixmap(0, 0, scaled, x, y, targetSize.width(), targetSize.height());
-    painter.end();
-
-    button->setIcon(QIcon(normalized));
-    return true;
+    return pixmap;
 }
 }
 
@@ -129,30 +114,39 @@ TargetIconProvider::TargetIconProvider(QObject *parent,
 {
 }
 
-void TargetIconProvider::applyIcon(QAbstractButton *button, const TargetDefinition &target)
+void TargetIconProvider::applyIcon(QLabel *label, const TargetDefinition &target)
 {
-    if (!button) {
+    if (!label) {
         return;
     }
 
-    button->setIconSize(QSize(kButtonIconExtent, kButtonIconExtent));
+    label->setFixedSize(kButtonIconExtent, kButtonIconExtent);
+    label->setAlignment(Qt::AlignCenter);
 
     const QString iconName = target.icon();
     const QString resolvedLocalPath = localIconPath(iconName, userIconsPath(), systemIconsPath());
-    if (!resolvedLocalPath.isEmpty() && loadButtonIcon(button, resolvedLocalPath)) {
-        return;
+    if (!resolvedLocalPath.isEmpty()) {
+        const QPixmap pixmap = loadLabelPixmap(resolvedLocalPath);
+        if (!pixmap.isNull()) {
+            setLabelPixmap(label, pixmap);
+            return;
+        }
     }
 
     if (isRemoteIconUrl(iconName)) {
         const QUrl url(iconName);
         const QString cacheKey = cacheKeyForUrl(url);
         const QString cachePath = cacheFilePath(cacheKey, cacheSuffixForUrl(url));
-        if (QFileInfo::exists(cachePath) && loadButtonIcon(button, cachePath)) {
-            return;
+        if (QFileInfo::exists(cachePath)) {
+            const QPixmap pixmap = loadLabelPixmap(cachePath);
+            if (!pixmap.isNull()) {
+                setLabelPixmap(label, pixmap);
+                return;
+            }
         }
 
-        button->setIcon(QIcon::fromTheme(QStringLiteral("image-x-generic")));
-        fetchRemoteIcon(url, cacheKey, button);
+        setLabelPixmap(label, QIcon::fromTheme(QStringLiteral("image-x-generic")).pixmap(kButtonIconExtent, kButtonIconExtent));
+        fetchRemoteIcon(url, cacheKey, label);
         return;
     }
 
@@ -160,18 +154,26 @@ void TargetIconProvider::applyIcon(QAbstractButton *button, const TargetDefiniti
     if (faviconUrl.isValid()) {
         const QString cacheKey = cacheKeyForUrl(faviconUrl);
         const QString cachePath = cacheFilePath(cacheKey, cacheSuffixForUrl(faviconUrl));
-        if (QFileInfo::exists(cachePath) && loadButtonIcon(button, cachePath)) {
-            return;
+        if (QFileInfo::exists(cachePath)) {
+            const QPixmap pixmap = loadLabelPixmap(cachePath);
+            if (!pixmap.isNull()) {
+                setLabelPixmap(label, pixmap);
+                return;
+            }
         }
 
         const QIcon fallbackIcon = !iconName.isEmpty() ? QIcon::fromTheme(iconName) : QIcon::fromTheme(QStringLiteral("image-x-generic"));
-        button->setIcon(fallbackIcon.isNull() ? QIcon::fromTheme(QStringLiteral("image-x-generic")) : fallbackIcon);
-        fetchRemoteIcon(faviconUrl, cacheKey, button);
+        setLabelPixmap(label,
+                       (fallbackIcon.isNull() ? QIcon::fromTheme(QStringLiteral("image-x-generic")) : fallbackIcon)
+                           .pixmap(kButtonIconExtent, kButtonIconExtent));
+        fetchRemoteIcon(faviconUrl, cacheKey, label);
         return;
     }
 
     const QIcon themeIcon = !iconName.isEmpty() ? QIcon::fromTheme(iconName) : QIcon::fromTheme(QStringLiteral("image-x-generic"));
-    button->setIcon(themeIcon.isNull() ? QIcon::fromTheme(QStringLiteral("image-x-generic")) : themeIcon);
+    setLabelPixmap(label,
+                   (themeIcon.isNull() ? QIcon::fromTheme(QStringLiteral("image-x-generic")) : themeIcon)
+                       .pixmap(kButtonIconExtent, kButtonIconExtent));
 }
 
 QString TargetIconProvider::systemIconsPath() const
@@ -189,14 +191,14 @@ QString TargetIconProvider::cacheIconsPath() const
     return m_cacheIconsPath.isEmpty() ? defaultCacheIconsPath() : m_cacheIconsPath;
 }
 
-void TargetIconProvider::fetchRemoteIcon(const QUrl &url, const QString &cacheKey, QAbstractButton *button)
+void TargetIconProvider::fetchRemoteIcon(const QUrl &url, const QString &cacheKey, QLabel *label)
 {
-    if (!url.isValid() || !button) {
+    if (!url.isValid() || !label) {
         return;
     }
 
-    m_pendingButtons[cacheKey].append(QPointer<QAbstractButton>(button));
-    if (m_pendingButtons[cacheKey].size() > 1) {
+    m_pendingLabels[cacheKey].append(QPointer<QLabel>(label));
+    if (m_pendingLabels[cacheKey].size() > 1) {
         return;
     }
 
@@ -226,32 +228,20 @@ void TargetIconProvider::handleRemoteIconReply(QNetworkReply *reply, const QStri
         }
     }
 
-    m_pendingButtons.remove(cacheKey);
+    m_pendingLabels.remove(cacheKey);
 }
 
 void TargetIconProvider::applyCachedIcon(const QString &cachePath, const QString &cacheKey)
 {
     QPixmap pixmap(cachePath);
     if (pixmap.isNull()) {
-        m_pendingButtons.remove(cacheKey);
+        m_pendingLabels.remove(cacheKey);
         return;
     }
-
-    const QSize targetSize(kButtonIconExtent, kButtonIconExtent);
-    const QPixmap scaled = pixmap.scaled(targetSize, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
-    QPixmap normalized(targetSize);
-    normalized.fill(Qt::transparent);
-    QPainter painter(&normalized);
-    const int x = (scaled.width() - targetSize.width()) / 2;
-    const int y = (scaled.height() - targetSize.height()) / 2;
-    painter.drawPixmap(0, 0, scaled, x, y, targetSize.width(), targetSize.height());
-    painter.end();
-
-    const QIcon icon(normalized);
-    const QList<QPointer<QAbstractButton>> buttons = m_pendingButtons.take(cacheKey);
-    for (const QPointer<QAbstractButton> &button : buttons) {
-        if (button) {
-            button->setIcon(icon);
+    const QList<QPointer<QLabel>> labels = m_pendingLabels.take(cacheKey);
+    for (const QPointer<QLabel> &label : labels) {
+        if (label) {
+            setLabelPixmap(label, pixmap);
         }
     }
 }
@@ -259,4 +249,27 @@ void TargetIconProvider::applyCachedIcon(const QString &cachePath, const QString
 QString TargetIconProvider::cacheFilePath(const QString &cacheKey, const QString &suffix) const
 {
     return QDir(cacheIconsPath()).filePath(QStringLiteral("%1.%2").arg(cacheKey, suffix));
+}
+
+void TargetIconProvider::setLabelPixmap(QLabel *label, const QPixmap &pixmap) const
+{
+    if (!label || pixmap.isNull()) {
+        return;
+    }
+    label->setPixmap(normalizedPixmap(pixmap));
+}
+
+QPixmap TargetIconProvider::normalizedPixmap(const QPixmap &pixmap) const
+{
+    const QSize targetSize(kButtonIconExtent, kButtonIconExtent);
+    const QPixmap scaled = pixmap.scaled(targetSize, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+
+    QPixmap normalized(targetSize);
+    normalized.fill(Qt::transparent);
+    QPainter painter(&normalized);
+    const int x = (scaled.width() - targetSize.width()) / 2;
+    const int y = (scaled.height() - targetSize.height()) / 2;
+    painter.drawPixmap(0, 0, scaled, x, y, targetSize.width(), targetSize.height());
+    painter.end();
+    return normalized;
 }
