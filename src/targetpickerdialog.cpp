@@ -1,10 +1,11 @@
 #include "targetpickerdialog.h"
 
 #include <QCommandLinkButton>
-#include <QDialogButtonBox>
+#include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
-#include <QPlainTextEdit>
+#include <QMessageBox>
+#include <QPushButton>
 #include <QScrollArea>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -22,21 +23,6 @@ TargetPickerDialog::TargetPickerDialog(const QList<TargetDefinition> &targets,
     auto *layout = new QVBoxLayout(this);
     auto *label = new QLabel(QStringLiteral("Choose an upload target:"), this);
     layout->addWidget(label);
-
-    if (!loadErrors.isEmpty()) {
-        auto *warning = new QLabel(
-            QStringLiteral("Some targets could not be loaded. Fix your config or remove invalid entries."), this);
-        warning->setWordWrap(true);
-        layout->addWidget(warning);
-
-        QString details = QStringLiteral("System targets: %1\nUser targets: %2\n\n%3")
-                              .arg(systemTargetsPath, userTargetsPath, loadErrors.join(QLatin1Char('\n')));
-        auto *detailsView = new QPlainTextEdit(this);
-        detailsView->setReadOnly(true);
-        detailsView->setPlainText(details);
-        detailsView->setMaximumHeight(140);
-        layout->addWidget(detailsView);
-    }
 
     auto *scrollArea = new QScrollArea(this);
     scrollArea->setWidgetResizable(true);
@@ -61,9 +47,35 @@ TargetPickerDialog::TargetPickerDialog(const QList<TargetDefinition> &targets,
     scrollArea->setWidget(content);
     layout->addWidget(scrollArea);
 
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, this);
-    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-    layout->addWidget(buttons);
+    auto *buttonLayout = new QHBoxLayout();
+    if (!loadErrors.isEmpty()) {
+        const int errorCount = loadErrors.size();
+        const QString details = QStringLiteral("System targets: %1\nUser targets: %2\n\n%3")
+                                    .arg(systemTargetsPath, userTargetsPath, loadErrors.join(QLatin1Char('\n')));
+        auto *errorButton = new QPushButton(
+            QIcon::fromTheme(QStringLiteral("dialog-error")),
+            errorCount == 1 ? QStringLiteral("1 error") : QStringLiteral("%1 errors").arg(errorCount),
+            this);
+        errorButton->setToolTip(QStringLiteral("Show target configuration errors"));
+        connect(errorButton, &QPushButton::clicked, this, [this, details, errorCount]() {
+            QMessageBox messageBox(this);
+            messageBox.setIcon(QMessageBox::Warning);
+            messageBox.setWindowTitle(QStringLiteral("Target Configuration Errors"));
+            messageBox.setText(errorCount == 1
+                                   ? QStringLiteral("One target could not be loaded.")
+                                   : QStringLiteral("%1 targets could not be loaded.").arg(errorCount));
+            messageBox.setInformativeText(QStringLiteral("Fix the invalid target files or remove them."));
+            messageBox.setDetailedText(details);
+            messageBox.exec();
+        });
+        buttonLayout->addWidget(errorButton);
+    }
+    buttonLayout->addStretch();
+
+    auto *cancelButton = new QPushButton(QStringLiteral("Cancel"), this);
+    connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
+    buttonLayout->addWidget(cancelButton);
+    layout->addLayout(buttonLayout);
 
     if (firstButton) {
         firstButton->setFocus();
