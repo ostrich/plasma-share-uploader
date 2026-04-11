@@ -6,6 +6,7 @@
 #include <QIcon>
 #include <QLabel>
 #include <QMessageBox>
+#include <QPalette>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QVBoxLayout>
@@ -52,7 +53,10 @@ public:
         auto *descriptionLabel = new QLabel(target.description(), this);
         descriptionLabel->setWordWrap(true);
         descriptionLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
-        descriptionLabel->setStyleSheet(QStringLiteral("color: palette(mid);"));
+        QPalette descriptionPalette = descriptionLabel->palette();
+        descriptionPalette.setColor(QPalette::WindowText,
+                                    titleLabel->palette().color(QPalette::Disabled, QPalette::WindowText));
+        descriptionLabel->setPalette(descriptionPalette);
         textLayout->addWidget(descriptionLabel);
 
         layout->addLayout(textLayout, 1);
