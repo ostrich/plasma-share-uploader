@@ -21,6 +21,7 @@ private:
     void startNextUpload();
     bool ensureTargetSelected();
     void cleanupTempArtifacts();
+    void finishCancelled();
     void finishError(const QString &message);
 
     ParsedTargetConfig m_targetConfig;

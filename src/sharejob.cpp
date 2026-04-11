@@ -169,6 +169,14 @@ void ShareJob::finishError(const QString &message)
     emitResult();
 }
 
+void ShareJob::finishCancelled()
+{
+    setError(0);
+    setErrorText(QStringLiteral("Upload cancelled."));
+    cleanupTempArtifacts();
+    emitResult();
+}
+
 void ShareJob::cleanupTempArtifacts()
 {
     for (const QString &path : std::as_const(m_tempDirs)) {
@@ -200,7 +208,7 @@ bool ShareJob::ensureTargetSelected()
     QWidget *parentWidget = QApplication::activeWindow();
     TargetPickerDialog dialog(compatibleTargets, loadResult.diagnostics, systemTargetsPath, userTargetsPath, parentWidget);
     if (dialog.exec() != QDialog::Accepted) {
-        finishError(QStringLiteral("Upload cancelled."));
+        finishCancelled();
         return false;
     }
 
