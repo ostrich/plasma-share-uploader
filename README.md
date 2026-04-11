@@ -43,6 +43,7 @@ Each target entry is an object inside the `targets` array. Required fields:
 Optional fields:
 - `pluginTypes`: Purpose plugin types (defaults to `["ShareUrl"]`).
 - `constraints`: Purpose constraints (e.g. `["mimeType:image/*"]`).
+- `preUpload`: ordered list of per-file preprocessing rules to run before upload.
 
 ### Request formats
 
@@ -63,6 +64,36 @@ Raw uploads:
 
 Headers:
 - `request.headers`: object of header name -> value (string values only), values support `${ENV:VARNAME}` substitution.
+
+### Pre-upload commands
+
+Targets may optionally define `preUpload` rules to transform a file before it is uploaded.
+Rules are evaluated once per file, in order. The first matching rule is used. If no
+rule matches, the original file is uploaded unchanged.
+
+Each `preUpload` entry must include:
+- `mime`: non-empty array of MIME patterns. Supported forms are exact MIME types such as `image/png`, wildcard subtype patterns such as `image/*`, and `*/*` to match any MIME type.
+- `fileHandling`: one of:
+  - `inplace_copy`: copy the original file to a temporary path, substitute `${FILE}` with that temporary path, run one or more commands in place on the copy, then upload the modified copy.
+  - `output_file`: substitute `${FILE}` with the original file path and `${OUT_FILE}` with a temporary output path, run exactly one command, then upload `${OUT_FILE}`.
+- `commands`: non-empty array of command objects.
+  - `inplace_copy` rules may contain one or more commands.
+  - `output_file` rules must contain exactly one command.
+
+Each command object must include:
+- `argv`: non-empty array of command arguments. Commands are executed directly without a shell.
+
+Available placeholders in `argv`:
+- `${FILE}`: required in every command.
+- `${OUT_FILE}`: required for `output_file`, and not allowed for `inplace_copy`.
+
+Behavior:
+- First matching `preUpload` rule wins.
+- No match: upload the original file.
+- Non-zero exit, timeout, or missing output file: fail that upload and surface stderr.
+- Original user files are never modified.
+
+If you want a catch-all fallback rule, use `*/*` and place it last.
 
 ### Response formats
 
@@ -91,6 +122,20 @@ Headers:
       "fileField": "file"
     }
   },
+  "preUpload": [
+    {
+      "mime": ["image/*"],
+      "fileHandling": "inplace_copy",
+      "commands": [
+        {
+          "argv": ["exiv2", "rm", "${FILE}"]
+        },
+        {
+          "argv": ["oxipng", "--strip", "all", "${FILE}"]
+        }
+      ]
+    }
+  ],
   "response": {
     "type": "json_pointer",
     "pointer": "/data/url"

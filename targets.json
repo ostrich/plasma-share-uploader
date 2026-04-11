@@ -17,6 +17,17 @@
           "fileField": "fileToUpload"
         }
       },
+      "preUpload": [
+        {
+          "mime": ["image/*"],
+          "fileHandling": "inplace_copy",
+          "commands": [
+            {
+              "argv": ["exiv2", "rm", "${FILE}"]
+            }
+          ]
+        }
+      ],
       "response": {
         "type": "text_url"
       }
@@ -36,6 +47,17 @@
           "fileField": "files[]"
         }
       },
+      "preUpload": [
+        {
+          "mime": ["image/*"],
+          "fileHandling": "inplace_copy",
+          "commands": [
+            {
+              "argv": ["exiv2", "rm", "${FILE}"]
+            }
+          ]
+        }
+      ],
       "response": {
         "type": "json_pointer",
         "pointer": "/files/0/url"

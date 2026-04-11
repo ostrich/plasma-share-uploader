@@ -11,6 +11,9 @@ import re
 from pathlib import Path
 
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+MIME_RE = re.compile(r"^[^/\s]+/[^/\s]+$")
+MIME_WILDCARD_RE = re.compile(r"^[^/\s]+/\*$")
+PLACEHOLDER_RE = re.compile(r"\$\{([A-Z_]+)\}")
 
 CPP_TEMPLATE = """
 #include \"sharejob.h\"
@@ -103,6 +106,82 @@ def validate_target(target: dict) -> None:
     else:
         if method.upper() not in {"POST", "PUT"}:
             raise ValueError(f"Target {target_id!r} request.method must be POST or PUT for raw")
+
+    pre_upload = target.get("preUpload")
+    if pre_upload is not None and not isinstance(pre_upload, list):
+        raise ValueError(f"Target {target_id!r} preUpload must be a list")
+    if isinstance(pre_upload, list):
+        for index, rule in enumerate(pre_upload):
+            rule_path = f"Target {target_id!r} preUpload[{index}]"
+            if not isinstance(rule, dict):
+                raise ValueError(f"{rule_path} must be an object")
+
+            mime_patterns = rule.get("mime")
+            if not isinstance(mime_patterns, list) or not mime_patterns:
+                raise ValueError(f"{rule_path}.mime must be a non-empty list")
+            for pattern in mime_patterns:
+                if not isinstance(pattern, str) or not pattern:
+                    raise ValueError(f"{rule_path}.mime must contain non-empty strings")
+                if pattern != "*/*" and not MIME_RE.match(pattern) and not MIME_WILDCARD_RE.match(pattern):
+                    raise ValueError(
+                        f"{rule_path}.mime entries must be exact MIME types, type/*, or */*"
+                    )
+                if pattern.startswith("*/") and pattern != "*/*":
+                    raise ValueError(
+                        f"{rule_path}.mime entries must be exact MIME types, type/*, or */*"
+                    )
+
+            file_handling = rule.get("fileHandling")
+            if file_handling not in {"inplace_copy", "output_file"}:
+                raise ValueError(
+                    f"{rule_path}.fileHandling must be inplace_copy or output_file"
+                )
+
+            commands = rule.get("commands")
+            if not isinstance(commands, list) or not commands:
+                raise ValueError(f"{rule_path}.commands must be a non-empty list")
+            if file_handling == "output_file" and len(commands) != 1:
+                raise ValueError(f"{rule_path}.commands must contain exactly one command for output_file")
+
+            saw_out_file = False
+            for command_index, command in enumerate(commands):
+                command_path = f"{rule_path}.commands[{command_index}]"
+                if not isinstance(command, dict):
+                    raise ValueError(f"{command_path} must be an object")
+
+                argv = command.get("argv")
+                if not isinstance(argv, list) or not argv:
+                    raise ValueError(f"{command_path}.argv must be a non-empty list")
+
+                has_file = False
+                command_has_out_file = False
+                for arg in argv:
+                    if not isinstance(arg, str) or not arg:
+                        raise ValueError(f"{command_path}.argv must contain non-empty strings")
+                    has_file = has_file or "${FILE}" in arg
+                    command_has_out_file = command_has_out_file or "${OUT_FILE}" in arg
+                    for placeholder in PLACEHOLDER_RE.findall(arg):
+                        if placeholder not in {"FILE", "OUT_FILE"}:
+                            raise ValueError(
+                                f"{command_path}.argv contains unsupported placeholder ${{{placeholder}}}"
+                            )
+
+                if not has_file:
+                    raise ValueError(f"{command_path}.argv must include ${{FILE}}")
+
+                if file_handling == "inplace_copy" and command_has_out_file:
+                    raise ValueError(
+                        f"{command_path}.argv must not include ${{OUT_FILE}} for inplace_copy"
+                    )
+
+                saw_out_file = saw_out_file or command_has_out_file
+
+            if file_handling == "output_file" and not saw_out_file:
+                raise ValueError(f"{rule_path}.commands[0].argv must include ${{OUT_FILE}}")
+
+            timeout_ms = rule.get("timeoutMs")
+            if timeout_ms is not None and (not isinstance(timeout_ms, int) or timeout_ms <= 0):
+                raise ValueError(f"{rule_path}.timeoutMs must be a positive integer")
 
     response = target.get("response")
     if not isinstance(response, dict):

@@ -3,7 +3,7 @@
     {
       "id": "zerox0",
       "displayName": "0x0.st",
-      "description": "Upload images to 0x0.st",
+      "description": "Upload images to 0x0.st after stripping metadata and optimizing PNGs",
       "icon": "image-x-generic",
       "pluginTypes": ["ShareUrl", "Export"],
       "constraints": ["mimeType:image/*"],
@@ -15,6 +15,20 @@
           "fileField": "file"
         }
       },
+      "preUpload": [
+        {
+          "mime": ["image/*"],
+          "fileHandling": "inplace_copy",
+          "commands": [
+            {
+              "argv": ["exiv2", "rm", "${FILE}"]
+            },
+            {
+              "argv": ["oxipng", "--strip", "all", "${FILE}"]
+            }
+          ]
+        }
+      ],
       "response": {
         "type": "text_url"
       }
