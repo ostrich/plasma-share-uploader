@@ -39,9 +39,9 @@ target_compile_definitions(runtimeuploadplugin PRIVATE
     QT_NO_CAST_FROM_ASCII
     PLASMA_SHARE_UPLOADER_VERSION="${PROJECT_VERSION}"
     PLASMA_SHARE_UPLOADER_SYSTEM_ICONS_PATH="${CMAKE_INSTALL_FULL_DATADIR}/plasma-share-uploader/icons"
-    PLASMA_SHARE_UPLOADER_SYSTEM_TARGETS_PATH="${CMAKE_INSTALL_FULL_DATADIR}/plasma-share-uploader/targets.d"
-    PLASMA_SHARE_UPLOADER_DEV_ICONS_PATH="${CMAKE_SOURCE_DIR}/data/icons"
-    PLASMA_SHARE_UPLOADER_DEV_TARGETS_PATH="${CMAKE_SOURCE_DIR}/data/targets.d"
+    PLASMA_SHARE_UPLOADER_SYSTEM_TARGETS_PATH="${CMAKE_INSTALL_FULL_DATADIR}/plasma-share-uploader/targets"
+    PLASMA_SHARE_UPLOADER_DEV_ICONS_PATH="${CMAKE_SOURCE_DIR}/icons"
+    PLASMA_SHARE_UPLOADER_DEV_TARGETS_PATH="${CMAKE_SOURCE_DIR}/targets"
 )
 
 set_target_properties(runtimeuploadplugin PROPERTIES
@@ -53,6 +53,6 @@ install(TARGETS runtimeuploadplugin
     DESTINATION ${KDE_INSTALL_QTPLUGINDIR}/kf6/purpose
 )
 
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/targets.d
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/targets
     DESTINATION ${CMAKE_INSTALL_DATADIR}/plasma-share-uploader
 )

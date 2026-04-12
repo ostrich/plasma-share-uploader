@@ -31,7 +31,7 @@ private slots:
 
 void TargetRegistryTest::loadsBundledSystemTargets()
 {
-    TargetRegistry registry(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../data/targets.d"), QStringLiteral("/nonexistent"));
+    TargetRegistry registry(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../targets"), QStringLiteral("/nonexistent"));
     const TargetRegistry::LoadResult result = registry.loadTargets();
 
     QVERIFY(result.diagnostics.isEmpty());
@@ -42,7 +42,7 @@ void TargetRegistryTest::loadsBundledSystemTargets()
 
 void TargetRegistryTest::exampleTargetFilesValidate()
 {
-    const QDir dir(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../data/targets.d/examples"));
+    const QDir dir(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../targets/examples"));
     QVERIFY(dir.exists());
 
     const QStringList fileNames = dir.entryList(QStringList{QStringLiteral("*.json")}, QDir::Files, QDir::Name);
@@ -72,13 +72,13 @@ void TargetRegistryTest::defaultUserTargetsPathIsStable()
     TargetRegistry registry;
     QCOMPARE(registry.userTargetsPath(),
              QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
-                 + QStringLiteral("/plasma-share-uploader/targets.d"));
+                 + QStringLiteral("/plasma-share-uploader/targets"));
 }
 
 void TargetRegistryTest::userTargetsOverrideSystemTargetsById()
 {
     QTemporaryDir dir;
-    const QString userDir = dir.filePath(QStringLiteral("targets.d"));
+    const QString userDir = dir.filePath(QStringLiteral("targets"));
     QVERIFY(QDir().mkpath(userDir));
     const QString userPath = userDir + QStringLiteral("/catbox.json");
     QFile userFile(userPath);
@@ -102,7 +102,7 @@ void TargetRegistryTest::userTargetsOverrideSystemTargetsById()
     })");
     userFile.close();
 
-    TargetRegistry registry(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../data/targets.d"), userDir);
+    TargetRegistry registry(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../targets"), userDir);
     const TargetRegistry::LoadResult result = registry.loadTargets();
 
     QCOMPARE(result.targets.size(), 2);
@@ -113,7 +113,7 @@ void TargetRegistryTest::userTargetsOverrideSystemTargetsById()
 void TargetRegistryTest::invalidUserOverrideFallsBackToSystemTarget()
 {
     QTemporaryDir dir;
-    const QString userDir = dir.filePath(QStringLiteral("targets.d"));
+    const QString userDir = dir.filePath(QStringLiteral("targets"));
     QVERIFY(QDir().mkpath(userDir));
 
     QFile userFile(userDir + QStringLiteral("/catbox.json"));
@@ -135,7 +135,7 @@ void TargetRegistryTest::invalidUserOverrideFallsBackToSystemTarget()
     })");
     userFile.close();
 
-    TargetRegistry registry(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../data/targets.d"), userDir);
+    TargetRegistry registry(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../targets"), userDir);
     const TargetRegistry::LoadResult result = registry.loadTargets();
 
     QCOMPARE(result.targets.size(), 2);
@@ -151,7 +151,7 @@ void TargetRegistryTest::invalidUserOverrideFallsBackToSystemTarget()
 void TargetRegistryTest::invalidTargetsProduceErrorsButDoNotBlockValidTargets()
 {
     QTemporaryDir dir;
-    const QString userDir = dir.filePath(QStringLiteral("targets.d"));
+    const QString userDir = dir.filePath(QStringLiteral("targets"));
     QVERIFY(QDir().mkpath(userDir));
 
     QFile badFile(userDir + QStringLiteral("/bad.json"));
@@ -207,7 +207,7 @@ void TargetRegistryTest::invalidTargetsProduceErrorsButDoNotBlockValidTargets()
 void TargetRegistryTest::malformedJsonProducesFileSpecificError()
 {
     QTemporaryDir dir;
-    const QString userDir = dir.filePath(QStringLiteral("targets.d"));
+    const QString userDir = dir.filePath(QStringLiteral("targets"));
     QVERIFY(QDir().mkpath(userDir));
 
     QFile badFile(userDir + QStringLiteral("/broken.json"));

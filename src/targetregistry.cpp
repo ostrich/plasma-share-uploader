@@ -23,7 +23,7 @@ QString defaultSystemTargetsPath()
 QString defaultUserTargetsPath()
 {
     return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
-        + QStringLiteral("/plasma-share-uploader/targets.d");
+        + QStringLiteral("/plasma-share-uploader/targets");
 }
 
 void appendRegistryDiagnostic(QList<TargetDiagnostic> &diagnostics,

@@ -33,14 +33,14 @@ cmake --install build
 ```
 
 Plugins install to the Purpose plugin directory (`${KDE_INSTALL_QTPLUGINDIR}/kf6/purpose`).
-The package also installs bundled targets under `/usr/share/plasma-share-uploader/targets.d/`.
+The package also installs bundled targets under `/usr/share/plasma-share-uploader/targets/`.
 Restart Dolphin/Gwenview/other Purpose-Share-enabled app after installing so the `Upload...` Share action shows up.
 
 ## Targets
 
 Targets are loaded at runtime from:
-- system defaults: `/usr/share/plasma-share-uploader/targets.d/*.json`
-- user overrides/custom targets: `~/.config/plasma-share-uploader/targets.d/*.json`
+- system defaults: `/usr/share/plasma-share-uploader/targets/*.json`
+- user overrides/custom targets: `~/.config/plasma-share-uploader/targets/*.json`
 
 Each file contains exactly one target object. Targets are merged by `id`, and user
 targets override system targets with the same `id`.
@@ -208,7 +208,7 @@ Each `response` object contains:
 ```
 
 To define this as a user target, save it as its own file such as
-`~/.config/plasma-share-uploader/targets.d/example.json`:
+`~/.config/plasma-share-uploader/targets/example.json`:
 
 ```json
 {
