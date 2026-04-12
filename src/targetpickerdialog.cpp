@@ -2,12 +2,15 @@
 
 #include "targeticonprovider.h"
 
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
-#include <QMessageBox>
+#include <QMap>
+#include <QPlainTextEdit>
 #include <QPalette>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QScrollArea>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -17,6 +20,30 @@ constexpr int kIconEdgePadding = 9;
 constexpr int kIconTextGap = 12;
 constexpr int kButtonVerticalPadding = 8;
 constexpr int kIconExtent = 36;
+
+QString pickerDiagnosticText(const TargetDiagnostic &diagnostic)
+{
+    QString message = diagnostic.message.trimmed();
+    static const QRegularExpression targetPrefix(QStringLiteral("^Target '[^']+'\\s+"));
+    message.remove(targetPrefix);
+
+    if (diagnostic.jsonPath.isEmpty()) {
+        return message;
+    }
+
+    QString dottedPath = diagnostic.jsonPath;
+    if (dottedPath.startsWith(QLatin1Char('/'))) {
+        dottedPath.remove(0, 1);
+    }
+    dottedPath.replace(QLatin1Char('/'), QLatin1Char('.'));
+
+    const QString pathPrefix = dottedPath + QLatin1Char(' ');
+    if (message.startsWith(pathPrefix)) {
+        message.remove(0, pathPrefix.size());
+    }
+
+    return QStringLiteral("%1: %2").arg(dottedPath, message);
+}
 
 class TargetPickerButton final : public QPushButton
 {
@@ -113,28 +140,64 @@ TargetPickerDialog::TargetPickerDialog(const QList<TargetDefinition> &targets,
     auto *buttonLayout = new QHBoxLayout();
     if (!diagnostics.isEmpty()) {
         const int errorCount = diagnostics.size();
-        Q_UNUSED(systemTargetsPath)
-        Q_UNUSED(userTargetsPath)
-        QStringList detailLines;
-        detailLines.reserve(diagnostics.size());
+        QMap<QString, QStringList> diagnosticsByFile;
         for (const TargetDiagnostic &diagnostic : diagnostics) {
-            detailLines.append(diagnostic.displayText());
+            const QString fileName = QFileInfo(diagnostic.filePath).fileName();
+            diagnosticsByFile[fileName.isEmpty() ? QStringLiteral("(unknown file)") : fileName].append(pickerDiagnosticText(diagnostic));
         }
-        const QString details = detailLines.join(QLatin1Char('\n'));
+        QStringList detailLines;
+        for (auto it = diagnosticsByFile.cbegin(); it != diagnosticsByFile.cend(); ++it) {
+            detailLines.append(it.key());
+            for (const QString &message : it.value()) {
+                detailLines.append(QStringLiteral("  - %1").arg(message));
+            }
+            detailLines.append(QString());
+        }
+        const QString details = detailLines.join(QLatin1Char('\n')).trimmed();
+        const int fileCount = diagnosticsByFile.size();
         auto *errorButton = new QPushButton(
             QIcon::fromTheme(QStringLiteral("dialog-error")),
             errorCount == 1 ? QStringLiteral("1 error") : QStringLiteral("%1 errors").arg(errorCount),
             this);
         errorButton->setToolTip(QStringLiteral("Show target configuration errors"));
-        connect(errorButton, &QPushButton::clicked, this, [this, details, errorCount]() {
-            QMessageBox messageBox(this);
-            messageBox.setIconPixmap(QIcon::fromTheme(QStringLiteral("dialog-error")).pixmap(24, 24));
-            messageBox.setWindowTitle(QStringLiteral("Target Configuration Errors"));
-            messageBox.setText(errorCount == 1
-                                   ? QStringLiteral("One target could not be loaded.")
-                                   : QStringLiteral("%1 targets could not be loaded.").arg(errorCount));
-            messageBox.setInformativeText(details);
-            messageBox.exec();
+        connect(errorButton, &QPushButton::clicked, this, [this, details, errorCount, fileCount]() {
+            auto *dialog = new QDialog(this);
+            dialog->setWindowTitle(QStringLiteral("Target Configuration Errors"));
+            dialog->resize(560, 360);
+
+            auto *dialogLayout = new QVBoxLayout(dialog);
+            auto *headerLayout = new QHBoxLayout();
+            auto *iconLabel = new QLabel(dialog);
+            iconLabel->setPixmap(QIcon::fromTheme(QStringLiteral("dialog-error")).pixmap(24, 24));
+            headerLayout->addWidget(iconLabel, 0, Qt::AlignTop);
+
+            QString summary;
+            if (fileCount == 1) {
+                summary = errorCount == 1
+                    ? QStringLiteral("1 error in 1 file.")
+                    : QStringLiteral("%1 errors in 1 file.").arg(errorCount);
+            } else {
+                summary = QStringLiteral("%1 errors in %2 files.").arg(errorCount).arg(fileCount);
+            }
+            auto *summaryLabel = new QLabel(summary, dialog);
+            summaryLabel->setWordWrap(true);
+            headerLayout->addWidget(summaryLabel, 1);
+            dialogLayout->addLayout(headerLayout);
+
+            auto *detailsEdit = new QPlainTextEdit(dialog);
+            detailsEdit->setReadOnly(true);
+            detailsEdit->setLineWrapMode(QPlainTextEdit::WidgetWidth);
+            detailsEdit->setPlainText(details);
+            dialogLayout->addWidget(detailsEdit, 1);
+
+            auto *okLayout = new QHBoxLayout();
+            okLayout->addStretch();
+            auto *okButton = new QPushButton(QStringLiteral("OK"), dialog);
+            connect(okButton, &QPushButton::clicked, dialog, &QDialog::accept);
+            okLayout->addWidget(okButton);
+            dialogLayout->addLayout(okLayout);
+
+            dialog->exec();
         });
         buttonLayout->addWidget(errorButton);
     }
