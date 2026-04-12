@@ -17,18 +17,6 @@
 #include <QNetworkRequest>
 #include <QNetworkReply>
 
-namespace {
-QString diagnosticsText(const QList<TargetDiagnostic> &diagnostics)
-{
-    QStringList lines;
-    lines.reserve(diagnostics.size());
-    for (const TargetDiagnostic &diagnostic : diagnostics) {
-        lines.append(diagnostic.displayText());
-    }
-    return lines.join(QLatin1Char('\n'));
-}
-}
-
 ShareJob::ShareJob(const QByteArray &configJson, QObject *parent)
     : Purpose::Job(parent)
     , m_uploader()
@@ -194,14 +182,9 @@ bool ShareJob::ensureTargetSelected()
     const QList<TargetDefinition> compatibleTargets = ConstraintMatcher::filterTargets(loadResult.targets, m_files);
 
     if (compatibleTargets.isEmpty()) {
-        QString message = QStringLiteral("No compatible upload targets available.");
-        message.append(QStringLiteral("\n\nSystem targets: %1").arg(systemTargetsPath));
-        message.append(QStringLiteral("\nUser targets: %1").arg(userTargetsPath));
-        if (!loadResult.diagnostics.isEmpty()) {
-            message.append(QStringLiteral("\n\n"));
-            message.append(diagnosticsText(loadResult.diagnostics));
-        }
-        finishError(message);
+        finishError(loadResult.targets.isEmpty()
+                        ? QStringLiteral("No upload targets are currently available.")
+                        : QStringLiteral("No upload targets match the selected files."));
         return false;
     }
 
