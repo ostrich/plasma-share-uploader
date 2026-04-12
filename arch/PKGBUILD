@@ -1,5 +1,5 @@
 pkgname=plasma-share-uploader-git
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc='Create custom upload targets for the KDE Plasma 6 Share menu'
 arch=('x86_64')
