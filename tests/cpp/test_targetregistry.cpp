@@ -22,6 +22,9 @@ private slots:
     void defaultUserTargetsPathIsStable();
     void userTargetsOverrideSystemTargetsById();
     void invalidUserOverrideFallsBackToSystemTarget();
+    void disabledBundledTargetIsSuppressed();
+    void userOverrideStillWinsWhenBundledTargetIsDisabled();
+    void disabledBundledTargetStaysSuppressedWhenUserOverrideIsInvalid();
     void invalidTargetsProduceErrorsButDoNotBlockValidTargets();
     void malformedJsonProducesFileSpecificError();
     void validatorAccumulatesMultipleDiagnosticsForOneTarget();
@@ -73,6 +76,9 @@ void TargetRegistryTest::defaultUserTargetsPathIsStable()
     QCOMPARE(registry.userTargetsPath(),
              QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
                  + QStringLiteral("/plasma-share-uploader/targets"));
+    QCOMPARE(registry.stateFilePath(),
+             QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
+                 + QStringLiteral("/plasma-share-uploader/state.json"));
 }
 
 void TargetRegistryTest::userTargetsOverrideSystemTargetsById()
@@ -144,6 +150,121 @@ void TargetRegistryTest::invalidUserOverrideFallsBackToSystemTarget()
     QVERIFY(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const TargetDiagnostic &diagnostic) {
         return diagnostic.filePath.endsWith(QStringLiteral("/catbox.json"))
             && diagnostic.jsonPath == QLatin1StringView("/request/url")
+            && diagnostic.code == QLatin1StringView("request.url.empty");
+    }));
+}
+
+void TargetRegistryTest::disabledBundledTargetIsSuppressed()
+{
+    QTemporaryDir dir;
+    const QString userDir = dir.filePath(QStringLiteral("targets"));
+    QVERIFY(QDir().mkpath(userDir));
+
+    QFile stateFile(dir.filePath(QStringLiteral("state.json")));
+    QVERIFY(stateFile.open(QIODevice::WriteOnly));
+    stateFile.write(R"({
+      "disabledBundledTargets": ["catbox"]
+    })");
+    stateFile.close();
+
+    TargetRegistry registry(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../targets"),
+                            userDir,
+                            stateFile.fileName());
+    const TargetRegistry::LoadResult result = registry.loadTargets();
+
+    QCOMPARE(result.targets.size(), 1);
+    QCOMPARE(result.targets.at(0).id(), QStringLiteral("uguu"));
+}
+
+void TargetRegistryTest::userOverrideStillWinsWhenBundledTargetIsDisabled()
+{
+    QTemporaryDir dir;
+    const QString userDir = dir.filePath(QStringLiteral("targets"));
+    QVERIFY(QDir().mkpath(userDir));
+
+    QFile stateFile(dir.filePath(QStringLiteral("state.json")));
+    QVERIFY(stateFile.open(QIODevice::WriteOnly));
+    stateFile.write(R"({
+      "disabledBundledTargets": ["catbox"]
+    })");
+    stateFile.close();
+
+    QFile userFile(userDir + QStringLiteral("/catbox.json"));
+    QVERIFY(userFile.open(QIODevice::WriteOnly));
+    userFile.write(R"({
+      "id": "catbox",
+      "displayName": "My Catbox",
+      "description": "override",
+      "icon": "image-x-generic",
+      "request": {
+        "url": "https://override.test/upload",
+        "method": "POST",
+        "multipart": {
+          "fields": {},
+          "fileField": "file"
+        }
+      },
+      "response": {
+        "type": "text_url"
+      }
+    })");
+    userFile.close();
+
+    TargetRegistry registry(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../targets"),
+                            userDir,
+                            stateFile.fileName());
+    const TargetRegistry::LoadResult result = registry.loadTargets();
+
+    QCOMPARE(result.targets.size(), 2);
+    QCOMPARE(result.targets.at(0).id(), QStringLiteral("catbox"));
+    QCOMPARE(result.targets.at(0).displayName(), QStringLiteral("My Catbox"));
+    QVERIFY(!result.targets.at(0).isBundled());
+}
+
+void TargetRegistryTest::disabledBundledTargetStaysSuppressedWhenUserOverrideIsInvalid()
+{
+    QTemporaryDir dir;
+    const QString userDir = dir.filePath(QStringLiteral("targets"));
+    QVERIFY(QDir().mkpath(userDir));
+
+    QFile stateFile(dir.filePath(QStringLiteral("state.json")));
+    QVERIFY(stateFile.open(QIODevice::WriteOnly));
+    stateFile.write(R"({
+      "disabledBundledTargets": ["catbox"]
+    })");
+    stateFile.close();
+
+    QFile userFile(userDir + QStringLiteral("/catbox.json"));
+    QVERIFY(userFile.open(QIODevice::WriteOnly));
+    userFile.write(R"({
+      "id": "catbox",
+      "displayName": "Broken Catbox",
+      "request": {
+        "url": "",
+        "method": "POST",
+        "multipart": {
+          "fields": {},
+          "fileField": "file"
+        }
+      },
+      "response": {
+        "type": "text_url"
+      }
+    })");
+    userFile.close();
+
+    TargetRegistry registry(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../targets"),
+                            userDir,
+                            stateFile.fileName());
+    const TargetRegistry::LoadResult result = registry.loadTargets();
+
+    QCOMPARE(result.targets.size(), 1);
+    QCOMPARE(result.targets.at(0).id(), QStringLiteral("uguu"));
+    QVERIFY(std::none_of(result.targets.begin(), result.targets.end(), [](const TargetDefinition &target) {
+        return target.id() == QLatin1StringView("catbox");
+    }));
+    QVERIFY(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const TargetDiagnostic &diagnostic) {
+        return diagnostic.filePath.endsWith(QStringLiteral("/catbox.json"))
             && diagnostic.code == QLatin1StringView("request.url.empty");
     }));
 }

@@ -1,6 +1,6 @@
 # Plasma Share Uploader
 
-Create runtime-configurable upload targets for the KDE Plasma 6 Share menu. The package ships one generic `Upload...` action that loads targets from JSON at runtime. [Catbox](https://catbox.moe/) and [Uguu](https://uguu.se/) are included by default.
+Create runtime-configurable upload targets for the KDE Plasma 6 Share menu. The package ships one generic `Upload To...` action that loads targets from JSON at runtime. [Catbox](https://catbox.moe/) and [Uguu](https://uguu.se/) are included by default.
 
 ![Screenshot](docs/screenshot.png)
 
@@ -32,22 +32,33 @@ server. It does not contact external upload services.
 cmake --install build
 ```
 
-Plugins install to the Purpose plugin directory (`${KDE_INSTALL_QTPLUGINDIR}/kf6/purpose`).
+Plugin installs to the Purpose plugin directory (`${KDE_INSTALL_QTPLUGINDIR}/kf6/purpose`).
 The package also installs bundled targets under `/usr/share/plasma-share-uploader/targets/`.
-Restart Dolphin/Gwenview/other Purpose-Share-enabled app after installing so the `Upload...` Share action shows up.
+Restart Dolphin/Gwenview/other Purpose-Share-enabled app after installing so the `Upload To...` Share action shows up.
 
 ## Targets
 
 Targets are loaded at runtime from:
 - system defaults: `/usr/share/plasma-share-uploader/targets/*.json`
 - user overrides/custom targets: `~/.config/plasma-share-uploader/targets/*.json`
+- user state: `~/.config/plasma-share-uploader/state.json`
 
 Each file contains exactly one target object. Targets are merged by `id`, and user
 targets override system targets with the same `id`.
 
-You do not need to rebuild after editing the user config. Add or edit files in the user
-directory, then restart the Share-enabled app or reopen its Share dialog so it reloads
-the target list.
+`state.json` may define:
+- `disabledBundledTargets`: array of bundled target ids to suppress without modifying the
+  files under `/usr/share`. User targets with the same `id` still win normally.
+
+Example `state.json`:
+
+```json
+{
+  "disabledBundledTargets": ["catbox", "uguu"]
+}
+```
+
+After editing the user config, restart the Share-enabled app to reload the target list.
 
 If target configuration errors are found, the picker shows an indicator. Opening it displays diagnostics by file.
 
@@ -165,7 +176,7 @@ Each `response` object contains:
 - `headers` with lowercased header names
 - `responseText`
 
-### User override example
+### Example target file
 
 ```json
 {
@@ -206,46 +217,8 @@ Each `response` object contains:
 }
 ```
 
-To define this as a user target, save it as its own file such as
-`~/.config/plasma-share-uploader/targets/example.json`:
+Save it as its own file, for example
+`~/.config/plasma-share-uploader/targets/example.json`.
 
-```json
-{
-  "id": "example",
-  "displayName": "ExampleHost",
-  "description": "Upload images to ExampleHost",
-  "icon": "image-x-generic",
-  "constraints": ["mimeType:image/*"],
-  "request": {
-    "url": "https://example.com/upload",
-    "method": "POST",
-    "multipart": {
-      "fields": {
-        "token": "${ENV:EXAMPLE_TOKEN}"
-      },
-      "fileField": "file"
-    }
-  },
-  "preUpload": [
-    {
-      "mime": ["image/*"],
-      "fileHandling": "inplace_copy",
-      "commands": [
-        {
-          "argv": ["exiv2", "rm", "${FILE}"]
-        },
-        {
-          "argv": ["oxipng", "--strip", "all", "${FILE}"]
-        }
-      ]
-    }
-  ],
-  "response": {
-    "type": "json_pointer",
-    "pointer": "/data/url"
-  }
-}
-```
-
-If you want to override a bundled target, give your file the same `id` as the system
-target. The user definition wins at runtime.
+To override a bundled target, give your file the same `id` as the system target. The
+user definition wins at runtime.

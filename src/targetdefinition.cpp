@@ -29,3 +29,8 @@ QStringList TargetDefinition::extensions() const
 {
     return target.core.extensions;
 }
+
+bool TargetDefinition::isBundled() const
+{
+    return source == Source::System;
+}
