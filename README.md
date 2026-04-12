@@ -49,8 +49,7 @@ You do not need to rebuild after editing the user config. Add or edit files in t
 directory, then restart the Share-enabled app or reopen its Share dialog so it reloads
 the target list.
 
-Invalid target files are skipped. If a config file contains errors, the picker dialog shows
-the paths it checked and the validation errors it encountered.
+If target configuration errors are found, the picker shows an indicator. Opening it displays diagnostics by file.
 
 ### Target format
 
