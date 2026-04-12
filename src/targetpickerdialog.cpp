@@ -106,7 +106,7 @@ TargetPickerDialog::TargetPickerDialog(const QList<TargetDefinition> &targets,
                                        QWidget *parent)
     : QDialog(parent)
 {
-    setWindowTitle(QStringLiteral("Upload..."));
+    setWindowTitle(QStringLiteral("Upload To..."));
     resize(460, 360);
     m_iconProvider = new TargetIconProvider(this);
 
