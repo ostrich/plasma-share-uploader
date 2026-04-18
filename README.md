@@ -198,7 +198,7 @@ Each `response` object contains:
   },
   "preUpload": [
     {
-      "mime": ["image/*"],
+      "mime": ["image/jpeg", "image/tiff"],
       "fileHandling": "inplace_copy",
       "commands": [
         {
