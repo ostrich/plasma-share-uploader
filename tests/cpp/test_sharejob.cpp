@@ -21,6 +21,7 @@ private slots:
     void noLocalFilesFails();
     void uploadsMultipleFilesSequentiallyAndUpdatesClipboard();
     void uploadsExposeVariantUrlsAndResponseMetadata();
+    void stagesInputFilesBeforeUpload();
     void preUploadTransformsUploadedBodyWithoutMutatingSource();
     void preUploadFailureStopsBeforeAnyUpload();
 };
@@ -150,6 +151,41 @@ void ShareJobTest::uploadsExposeVariantUrlsAndResponseMetadata()
     QCOMPARE(response.value(QStringLiteral("responseUrl")).toString(), server.url(QStringLiteral("/upload")).toString());
     QCOMPARE(response.value(QStringLiteral("headers")).toObject().value(QStringLiteral("x-delete")).toString(),
              QStringLiteral("https://files.example/delete/1"));
+}
+
+void ShareJobTest::stagesInputFilesBeforeUpload()
+{
+    HttpCaptureServer server;
+    QVERIFY(server.start());
+    server.enqueueResponse({200, "OK", "text/plain", {}, "https://files.example/staged"});
+
+    QTemporaryDir dir;
+    const QString filePath = writeTempFile(dir, QStringLiteral("sample.png"), tinyPng());
+    const QString uploadUrl =
+        QStringLiteral("http://127.0.0.1:%1/upload/${FILENAME}").arg(server.serverPort());
+    const QJsonObject config{
+        {QStringLiteral("id"), QStringLiteral("raw")},
+        {QStringLiteral("displayName"), QStringLiteral("Raw Target")},
+        {QStringLiteral("request"),
+         QJsonObject{{QStringLiteral("url"), uploadUrl},
+                     {QStringLiteral("method"), QStringLiteral("PUT")},
+                     {QStringLiteral("type"), QStringLiteral("raw")}}},
+        {QStringLiteral("response"), QJsonObject{{QStringLiteral("type"), QStringLiteral("text_url")}}}};
+
+    ShareJob job(QJsonDocument(config).toJson(QJsonDocument::Compact));
+    job.setAutoDelete(false);
+    job.setData(QJsonObject{{QStringLiteral("url"), QUrl::fromLocalFile(filePath).toString()}});
+
+    QSignalSpy resultSpy(&job, &KJob::result);
+    job.start();
+
+    QVERIFY(QFile::remove(filePath));
+
+    QTRY_COMPARE(resultSpy.count(), 1);
+    QCOMPARE(job.error(), 0);
+    QCOMPARE(server.requests().size(), 1);
+    QCOMPARE(server.requests().first().path, QByteArray("/upload/sample.png"));
+    QCOMPARE(server.requests().first().body, tinyPng());
 }
 
 void ShareJobTest::preUploadTransformsUploadedBodyWithoutMutatingSource()

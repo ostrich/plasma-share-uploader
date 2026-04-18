@@ -23,10 +23,12 @@ private:
     void cleanupTempArtifacts();
     void finishCancelled();
     void finishError(const QString &message);
+    bool stageInputFiles();
 
     ParsedTargetConfig m_targetConfig;
     TargetUploader m_uploader;
     QStringList m_files;
+    QStringList m_originalFiles;
     QList<UploadResult> m_uploadResults;
     QStringList m_uploadedUrls;
     QStringList m_tempDirs;

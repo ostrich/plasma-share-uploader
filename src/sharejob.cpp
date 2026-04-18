@@ -10,12 +10,15 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkRequest>
 #include <QNetworkReply>
+#include <QTemporaryDir>
 
 ShareJob::ShareJob(const QByteArray &configJson, QObject *parent)
     : Purpose::Job(parent)
@@ -31,9 +34,13 @@ ShareJob::ShareJob(const QByteArray &configJson, QObject *parent)
 
 void ShareJob::start()
 {
-    m_files = collectSharedFilePaths(data());
-    if (m_files.isEmpty()) {
+    m_originalFiles = collectSharedFilePaths(data());
+    if (m_originalFiles.isEmpty()) {
         finishError(QStringLiteral("No local files found to upload."));
+        return;
+    }
+
+    if (!stageInputFiles()) {
         return;
     }
 
@@ -104,8 +111,9 @@ void ShareJob::startNextUpload()
         return;
     }
 
-    const QString originalPath = m_files.at(m_nextIndex);
-    const PreUploadProcessor::Result prepared = PreUploadProcessor::preprocessFile(m_targetConfig.preUpload, originalPath);
+    const QString sourcePath = m_originalFiles.value(m_nextIndex, m_files.at(m_nextIndex));
+    const QString stagedPath = m_files.at(m_nextIndex);
+    const PreUploadProcessor::Result prepared = PreUploadProcessor::preprocessFile(m_targetConfig.preUpload, stagedPath);
     if (!prepared.ok) {
         finishError(prepared.errorMessage);
         return;
@@ -116,7 +124,7 @@ void ShareJob::startNextUpload()
 
     QNetworkReply *reply = m_uploader.upload(prepared.uploadPath, &m_network);
     if (!reply) {
-        finishError(QStringLiteral("Failed to start upload for %1").arg(originalPath));
+        finishError(QStringLiteral("Failed to start upload for %1").arg(sourcePath));
         return;
     }
 
@@ -171,6 +179,40 @@ void ShareJob::cleanupTempArtifacts()
         QDir(path).removeRecursively();
     }
     m_tempDirs.clear();
+}
+
+bool ShareJob::stageInputFiles()
+{
+    m_files.clear();
+
+    QTemporaryDir tempDir;
+    if (!tempDir.isValid()) {
+        finishError(QStringLiteral("Failed to create temporary directory for upload staging."));
+        return false;
+    }
+    tempDir.setAutoRemove(false);
+
+    const QString stagingRoot = tempDir.path();
+    m_tempDirs.append(stagingRoot);
+
+    for (int i = 0; i < m_originalFiles.size(); ++i) {
+        const QString originalPath = m_originalFiles.at(i);
+        const QFileInfo originalInfo(originalPath);
+        const QString subdirPath = QDir(stagingRoot).filePath(QString::number(i));
+        if (!QDir().mkpath(subdirPath)) {
+            finishError(QStringLiteral("Failed to prepare temporary upload staging directory."));
+            return false;
+        }
+
+        const QString stagedPath = QDir(subdirPath).filePath(originalInfo.fileName());
+        if (!QFile::copy(originalPath, stagedPath)) {
+            finishError(QStringLiteral("Failed to prepare temporary upload copy for %1").arg(originalPath));
+            return false;
+        }
+        m_files.append(stagedPath);
+    }
+
+    return true;
 }
 
 bool ShareJob::ensureTargetSelected()
