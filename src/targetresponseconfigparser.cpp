@@ -1,6 +1,7 @@
 #include "targetresponseconfigparser.h"
 
 #include <QJsonObject>
+#include <QRegularExpression>
 
 namespace {
 bool appendDiagnostic(QList<TargetDiagnostic> *diagnostics,
@@ -94,6 +95,20 @@ bool parseExtractor(const QString &targetId,
                                   QStringLiteral("%1.group.invalid").arg(path),
                                   QStringLiteral("Target '%1' %2.group must be a non-negative integer").arg(targetId, path));
         }
+        if (!local.pattern.isEmpty()) {
+            const QRegularExpression regex(local.pattern);
+            if (!regex.isValid()) {
+                ok = appendDiagnostic(diagnostics,
+                                      QStringLiteral("%1/pattern").arg(jsonPath),
+                                      QStringLiteral("%1.pattern.invalid").arg(path),
+                                      QStringLiteral("Target '%1' %2.pattern is invalid: %3").arg(targetId, path, regex.errorString()));
+            } else if (local.group > regex.captureCount()) {
+                ok = appendDiagnostic(diagnostics,
+                                      QStringLiteral("%1/group").arg(jsonPath),
+                                      QStringLiteral("%1.group.out_of_range").arg(path),
+                                      QStringLiteral("Target '%1' %2.group exceeds the pattern's capture count").arg(targetId, path));
+            }
+        }
     }
 
     if (local.type == ResponseExtractorType::JsonPointer) {
@@ -138,6 +153,7 @@ bool parseExtractor(const QString &targetId,
         }
     }
 
+    local.valid = ok;
     if (parsed) {
         *parsed = local;
     }

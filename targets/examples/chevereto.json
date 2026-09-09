@@ -19,10 +19,10 @@
   },
   "response": {
     "type": "json_pointer",
-    "pointer": "/image/URL_Viewer",
+    "pointer": "/image/url_viewer",
     "thumbnail": {
       "type": "json_pointer",
-      "pointer": "/image/Thumb/URL"
+      "pointer": "/image/thumb/url"
     },
     "error": {
       "type": "json_pointer",

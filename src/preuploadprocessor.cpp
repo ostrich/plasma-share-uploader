@@ -3,12 +3,14 @@
 #include "targetpreuploadconfigparser.h"
 
 #include <QDir>
+#include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
 #include <QMimeDatabase>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QTemporaryDir>
+#include <QTimer>
 
 namespace {
 constexpr int kDefaultPreUploadTimeoutMs = 30000;
@@ -53,38 +55,6 @@ QString formatCommand(const QStringList &argv)
     return quoted.join(QLatin1Char(' '));
 }
 
-QString runCommand(const QStringList &argv, int timeoutMs)
-{
-    if (argv.isEmpty()) {
-        return QStringLiteral("Pre-upload command is empty.");
-    }
-
-    QProcess process;
-    process.setProgram(argv.first());
-    process.setArguments(argv.mid(1));
-    process.start();
-    if (!process.waitForStarted(timeoutMs)) {
-        return QStringLiteral("Failed to start pre-upload command: %1").arg(process.errorString());
-    }
-
-    if (!process.waitForFinished(timeoutMs)) {
-        process.kill();
-        process.waitForFinished();
-        return QStringLiteral("Pre-upload command timed out: %1").arg(formatCommand(argv));
-    }
-
-    const QString stdErr = QString::fromUtf8(process.readAllStandardError()).trimmed();
-    const QString stdOut = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
-    if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
-        const QString details = !stdErr.isEmpty() ? stdErr : stdOut;
-        return details.isEmpty()
-            ? QStringLiteral("Pre-upload command failed: %1").arg(formatCommand(argv))
-            : details;
-    }
-
-    return QString();
-}
-
 QString diagnosticsText(const QList<TargetDiagnostic> &diagnostics)
 {
     QStringList lines;
@@ -108,99 +78,176 @@ PreUploadProcessor::Result PreUploadProcessor::preprocessFile(const QJsonObject 
     return preprocessFile(parsed, filePath);
 }
 
-PreUploadProcessor::Result PreUploadProcessor::preprocessFile(const ParsedPreUploadConfig &config, const QString &filePath)
+namespace {
+class ProcessingTask final : public QObject
 {
-    Result result;
-    result.ok = true;
-    result.uploadPath = filePath;
-
-    if (config.rules.isEmpty()) {
-        return result;
+public:
+    ProcessingTask(const ParsedPreUploadConfig &config, const QString &filePath,
+                   QObject *context, std::function<void(PreUploadProcessor::Result)> completed)
+        : QObject(context), m_completed(std::move(completed))
+    {
+        m_timeout.setSingleShot(true);
+        connect(&m_timeout, &QTimer::timeout, this, [this]() {
+            m_timedOut = true;
+            m_process.kill();
+        });
+        connect(&m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
+            if (error == QProcess::FailedToStart) {
+                finish(QStringLiteral("Failed to start pre-upload command: %1").arg(m_process.errorString()));
+            }
+        });
+        connect(&m_process, &QProcess::finished, this, [this](int exitCode, QProcess::ExitStatus status) {
+            m_timeout.stop();
+            if (m_timedOut) {
+                finish(QStringLiteral("Pre-upload command timed out: %1").arg(formatCommand(m_argv)));
+                return;
+            }
+            const QString stdErr = QString::fromUtf8(m_process.readAllStandardError()).trimmed();
+            const QString stdOut = QString::fromUtf8(m_process.readAllStandardOutput()).trimmed();
+            if (status != QProcess::NormalExit || exitCode != 0) {
+                const QString details = !stdErr.isEmpty() ? stdErr : stdOut;
+                finish(details.isEmpty() ? QStringLiteral("Pre-upload command failed: %1").arg(formatCommand(m_argv)) : details);
+                return;
+            }
+            runNextCommand();
+        });
+        QTimer::singleShot(0, this, [this, config, filePath]() { prepare(config, filePath); });
     }
 
-    const QString mimeType = QMimeDatabase{}.mimeTypeForFile(filePath, QMimeDatabase::MatchContent).name();
+    ~ProcessingTask() override
+    {
+        // Stop the writer before the owned temporary directory is removed.
+        m_process.disconnect(this);
+        if (m_process.state() != QProcess::NotRunning) {
+            m_process.kill();
+            m_process.waitForFinished(1000);
+        }
+    }
 
-    ParsedPreUploadRule selectedRule;
-    bool foundRule = false;
-    for (const ParsedPreUploadRule &rule : config.rules) {
-        for (const QString &pattern : rule.mimePatterns) {
-            if (!pattern.isEmpty() && mimeMatchesPattern(mimeType, pattern)) {
-                selectedRule = rule;
-                foundRule = true;
+private:
+    void prepare(const ParsedPreUploadConfig &config, const QString &filePath)
+    {
+        m_result.uploadPath = filePath;
+        if (config.rules.isEmpty()) {
+            finish();
+            return;
+        }
+        const QString mimeType = QMimeDatabase{}.mimeTypeForFile(filePath, QMimeDatabase::MatchContent).name();
+        bool foundRule = false;
+        for (const auto &rule : config.rules) {
+            for (const auto &pattern : rule.mimePatterns) {
+                if (mimeMatchesPattern(mimeType, pattern)) {
+                    m_rule = rule;
+                    foundRule = true;
+                    break;
+                }
+            }
+            if (foundRule) {
                 break;
             }
         }
-
-        if (foundRule) {
-            break;
-        }
-    }
-
-    if (!foundRule) {
-        return result;
-    }
-
-    QTemporaryDir tempDir;
-    if (!tempDir.isValid()) {
-        result.ok = false;
-        result.errorMessage = QStringLiteral("Failed to create temporary directory for pre-upload processing.");
-        return result;
-    }
-    tempDir.setAutoRemove(false);
-
-    const QFileInfo fileInfo(filePath);
-    result.tempDirPath = tempDir.path();
-    const QString tempFilePath = QDir(result.tempDirPath).filePath(fileInfo.fileName());
-    QString outFilePath;
-
-    if (selectedRule.fileHandling == PreUploadFileHandling::InplaceCopy) {
-        if (!QFile::copy(filePath, tempFilePath)) {
-            result.ok = false;
-            result.errorMessage = QStringLiteral("Failed to create temporary copy for %1").arg(filePath);
-            QDir(result.tempDirPath).removeRecursively();
-            result.tempDirPath.clear();
-            return result;
-        }
-        result.uploadPath = tempFilePath;
-    } else if (selectedRule.fileHandling == PreUploadFileHandling::OutputFile) {
-        outFilePath = QDir(result.tempDirPath).filePath(fileInfo.fileName());
-    } else {
-        result.ok = false;
-        result.errorMessage = QStringLiteral("Unsupported pre-upload fileHandling.");
-        QDir(result.tempDirPath).removeRecursively();
-        result.tempDirPath.clear();
-        return result;
-    }
-
-    const int timeoutMs = selectedRule.timeoutMs > 0 ? selectedRule.timeoutMs : kDefaultPreUploadTimeoutMs;
-    for (const ParsedPreUploadCommand &command : selectedRule.commands) {
-        QStringList argv;
-        argv.reserve(command.argv.size());
-        for (const QString &arg : command.argv) {
-            argv.append(substituteCommandArg(arg, result.uploadPath, outFilePath));
+        if (!foundRule) {
+            finish();
+            return;
         }
 
-        const QString commandError = runCommand(argv, timeoutMs);
-        if (!commandError.isEmpty()) {
-            result.ok = false;
-            result.errorMessage = commandError;
-            QDir(result.tempDirPath).removeRecursively();
-            result.tempDirPath.clear();
-            return result;
+        m_result.tempDir = std::make_shared<QTemporaryDir>(QDir::tempPath() + QStringLiteral("/plasma-share-preupload-XXXXXX"));
+        if (!m_result.tempDir->isValid()) {
+            finish(QStringLiteral("Failed to create temporary directory for pre-upload processing."));
+            return;
         }
+        m_result.tempDirPath = m_result.tempDir->path();
+        const QString tempFilePath = QDir(m_result.tempDirPath).filePath(QFileInfo(filePath).fileName());
+        if (m_rule.fileHandling == PreUploadFileHandling::InplaceCopy) {
+            if (!QFile::copy(filePath, tempFilePath)) {
+                finish(QStringLiteral("Failed to create temporary copy for %1").arg(filePath));
+                return;
+            }
+            if (!QFile::setPermissions(tempFilePath, QFile::permissions(tempFilePath) | QFileDevice::WriteOwner)) {
+                finish(QStringLiteral("Failed to make temporary upload copy writable."));
+                return;
+            }
+            m_result.uploadPath = tempFilePath;
+        } else if (m_rule.fileHandling == PreUploadFileHandling::OutputFile) {
+            m_outFilePath = tempFilePath;
+        } else {
+            finish(QStringLiteral("Unsupported pre-upload fileHandling."));
+            return;
+        }
+        runNextCommand();
     }
 
-    if (selectedRule.fileHandling == PreUploadFileHandling::OutputFile) {
-        QFileInfo outInfo(outFilePath);
-        if (!outInfo.exists() || !outInfo.isFile()) {
-            result.ok = false;
-            result.errorMessage = QStringLiteral("Pre-upload command did not create an output file.");
-            QDir(result.tempDirPath).removeRecursively();
-            result.tempDirPath.clear();
-            return result;
+    void runNextCommand()
+    {
+        if (m_nextCommand >= m_rule.commands.size()) {
+            if (m_rule.fileHandling == PreUploadFileHandling::OutputFile) {
+                const QFileInfo outInfo(m_outFilePath);
+                if (!outInfo.exists() || !outInfo.isFile()) {
+                    finish(QStringLiteral("Pre-upload command did not create an output file."));
+                    return;
+                }
+                m_result.uploadPath = outInfo.absoluteFilePath();
+            }
+            finish();
+            return;
         }
-        result.uploadPath = outInfo.absoluteFilePath();
+        m_argv.clear();
+        for (const auto &arg : m_rule.commands.at(m_nextCommand++).argv) {
+            m_argv.append(substituteCommandArg(arg, m_result.uploadPath, m_outFilePath));
+        }
+        if (m_argv.isEmpty()) {
+            finish(QStringLiteral("Pre-upload command is empty."));
+            return;
+        }
+        m_timedOut = false;
+        m_process.start(m_argv.first(), m_argv.mid(1));
+        m_timeout.start(m_rule.timeoutMs > 0 ? m_rule.timeoutMs : kDefaultPreUploadTimeoutMs);
     }
 
+    void finish(const QString &error = {})
+    {
+        if (!m_completed) {
+            return;
+        }
+        m_timeout.stop();
+        m_result.ok = error.isEmpty();
+        m_result.errorMessage = error;
+        if (!m_result.ok) {
+            m_result.tempDir.reset();
+            m_result.tempDirPath.clear();
+        }
+        auto completed = std::move(m_completed);
+        auto result = std::move(m_result);
+        deleteLater();
+        completed(std::move(result));
+    }
+
+    std::function<void(PreUploadProcessor::Result)> m_completed;
+    PreUploadProcessor::Result m_result;
+    ParsedPreUploadRule m_rule;
+    QString m_outFilePath;
+    QStringList m_argv;
+    int m_nextCommand = 0;
+    bool m_timedOut = false;
+    QProcess m_process;
+    QTimer m_timeout;
+};
+}
+
+QObject *PreUploadProcessor::preprocessFileAsync(const ParsedPreUploadConfig &config, const QString &filePath,
+                                                QObject *context, std::function<void(Result)> completed)
+{
+    return new ProcessingTask(config, filePath, context, std::move(completed));
+}
+
+PreUploadProcessor::Result PreUploadProcessor::preprocessFile(const ParsedPreUploadConfig &config, const QString &filePath)
+{
+    QEventLoop loop;
+    Result result;
+    preprocessFileAsync(config, filePath, &loop, [&](Result prepared) {
+        result = std::move(prepared);
+        loop.quit();
+    });
+    loop.exec();
     return result;
 }

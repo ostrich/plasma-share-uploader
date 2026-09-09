@@ -16,6 +16,23 @@
 namespace {
 constexpr int kUploadTimeoutMs = 30000;
 
+QString multipartParameter(const QString &value)
+{
+    // Escape quoted-string delimiters and encode controls before building a header.
+    QString escaped;
+    for (const QChar ch : value) {
+        if (ch.unicode() < 0x20 || ch.unicode() == 0x7f) {
+            escaped += QString::fromLatin1(QUrl::toPercentEncoding(QString(ch)));
+        } else {
+            if (ch == QLatin1Char('"') || ch == QLatin1Char('\\')) {
+                escaped += QLatin1Char('\\');
+            }
+            escaped += ch;
+        }
+    }
+    return escaped;
+}
+
 UploadResponseInfo buildResponseInfo(QNetworkReply *reply, const QString &responseText)
 {
     UploadResponseInfo info;
@@ -46,7 +63,9 @@ QByteArray createJsonBody(const QJsonObject &jsonConfig, const QFileInfo &fileIn
     if (substituted.isArray()) {
         return QJsonDocument(substituted.toArray()).toJson(QJsonDocument::Compact);
     }
-    return {};
+    // QJsonDocument only represents containers; unwrap a one-element array for scalars.
+    const QByteArray wrapped = QJsonDocument(QJsonArray{substituted}).toJson(QJsonDocument::Compact);
+    return wrapped.mid(1, wrapped.size() - 2);
 }
 
 QString extractConfiguredValue(const ParsedResponseExtractor &config, QNetworkReply *reply, const QByteArray &body, const QString &responseText)
@@ -82,7 +101,7 @@ QString extractConfiguredValue(const ParsedResponseExtractor &config, QNetworkRe
     if (config.type == ResponseExtractorType::RedirectUrl) {
         const QVariant redirectTarget = reply->attribute(QNetworkRequest::RedirectionTargetAttribute);
         if (redirectTarget.isValid()) {
-            return redirectTarget.toUrl().toString();
+            return reply->url().resolved(redirectTarget.toUrl()).toString();
         }
         return reply->url().toString();
     }
@@ -231,7 +250,7 @@ QNetworkReply *TargetUploader::upload(const QString &filePath, QNetworkAccessMan
         auto *multi = new QHttpMultiPart(QHttpMultiPart::FormDataType);
         for (auto it = m_targetConfig.request.multipartFields.begin(); it != m_targetConfig.request.multipartFields.end(); ++it) {
             QHttpPart fieldPart;
-            const QString disposition = QStringLiteral("form-data; name=\"%1\"").arg(it.key());
+            const QString disposition = QStringLiteral("form-data; name=\"%1\"").arg(multipartParameter(it.key()));
             fieldPart.setHeader(QNetworkRequest::ContentDispositionHeader, disposition);
             fieldPart.setBody(TargetUploaderUtils::substituteRequestValue(it.value(), fileInfo).toUtf8());
             multi->append(fieldPart);
@@ -246,7 +265,7 @@ QNetworkReply *TargetUploader::upload(const QString &filePath, QNetworkAccessMan
 
         QHttpPart filePart;
         const QString disposition = QStringLiteral("form-data; name=\"%1\"; filename=\"%2\"")
-                                       .arg(m_targetConfig.request.fileField, fileInfo.fileName());
+                                       .arg(multipartParameter(m_targetConfig.request.fileField), multipartParameter(fileInfo.fileName()));
         filePart.setHeader(QNetworkRequest::ContentDispositionHeader, disposition);
         filePart.setBodyDevice(file);
         file->setParent(multi);
@@ -317,6 +336,11 @@ UploadResult TargetUploader::parseReply(QNetworkReply *reply) const
 
     if (statusCode >= 400) {
         result.errorMessage = extractErrorMessage(m_targetConfig.response, reply, body, responseText);
+        return result;
+    }
+
+    if (reply->error() != QNetworkReply::NoError) {
+        result.errorMessage = reply->errorString();
         return result;
     }
 

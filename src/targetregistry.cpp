@@ -12,11 +12,6 @@
 #include <QStandardPaths>
 
 namespace {
-QString defaultDevTargetsPath()
-{
-    return QStringLiteral(PLASMA_SHARE_UPLOADER_DEV_TARGETS_PATH);
-}
-
 QString defaultSystemTargetsPath()
 {
     return QStringLiteral(PLASMA_SHARE_UPLOADER_SYSTEM_TARGETS_PATH);
@@ -179,10 +174,12 @@ QString TargetRegistry::systemTargetsPath() const
         return m_systemPath;
     }
 
-    const QString devPath = defaultDevTargetsPath();
+#ifdef PLASMA_SHARE_UPLOADER_DEV_TARGETS_PATH
+    const QString devPath = QStringLiteral(PLASMA_SHARE_UPLOADER_DEV_TARGETS_PATH);
     if (QDir(devPath).exists()) {
         return devPath;
     }
+#endif
 
     return defaultSystemTargetsPath();
 }

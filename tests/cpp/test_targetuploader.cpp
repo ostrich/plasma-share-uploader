@@ -30,6 +30,12 @@ private slots:
     void parserErrorsAreReported();
     void rejectsMissingFileAndNullManager();
     void idAndDisplayNameFallbacksWork();
+    void interruptedResponseFails();
+    void relativeRedirectResolvesAgainstReplyUrl();
+    void multipartEscapesHeaderParameters();
+    void jsonScalarBodies_data();
+    void jsonScalarBodies();
+    void cheveretoExampleExtractsDocumentedResponse();
 
 private:
     UploadResult runUpload(TargetUploader &uploader, const QString &filePath, QNetworkAccessManager &manager);
@@ -539,6 +545,115 @@ void TargetUploaderTest::idAndDisplayNameFallbacksWork()
 
     QCOMPARE(uploader.id(), QStringLiteral("target-id"));
     QCOMPARE(uploader.displayName(), QStringLiteral("target-id"));
+}
+
+void TargetUploaderTest::interruptedResponseFails()
+{
+    HttpCaptureServer server;
+    QVERIFY(server.start());
+    server.enqueueResponse({200, "OK", "text/plain", {}, "https://files.example/incomplete", 1000});
+    QTemporaryDir dir;
+    const QString filePath = writeTempFile(dir, QStringLiteral("input.txt"), "body");
+    TargetUploader uploader(rawTarget(server.url()));
+    QNetworkAccessManager manager;
+    const auto result = runUpload(uploader, filePath, manager);
+    QVERIFY(!result.ok);
+    QVERIFY(!result.errorMessage.isEmpty());
+    QVERIFY(result.url.isEmpty());
+    QCOMPARE(result.responseInfo.statusCode, 200);
+}
+
+void TargetUploaderTest::relativeRedirectResolvesAgainstReplyUrl()
+{
+    HttpCaptureServer server;
+    QVERIFY(server.start());
+    server.enqueueResponse({302, "Found", "text/plain", {{"Location", "../files/result?token=a%2Bb"}}, {}});
+    QTemporaryDir dir;
+    const QString filePath = writeTempFile(dir, QStringLiteral("input.txt"), "body");
+    auto config = rawTarget(server.url(QStringLiteral("/api/upload")));
+    config.insert(QStringLiteral("response"), QJsonObject{{QStringLiteral("type"), QStringLiteral("redirect_url")}});
+    TargetUploader uploader(config);
+    QNetworkAccessManager manager;
+    const auto result = runUpload(uploader, filePath, manager);
+    QVERIFY(result.ok);
+    QCOMPARE(result.url, server.url(QStringLiteral("/files/result")).toString() + QStringLiteral("?token=a%2Bb"));
+    QCOMPARE(server.requests().size(), 1);
+}
+
+void TargetUploaderTest::multipartEscapesHeaderParameters()
+{
+    HttpCaptureServer server;
+    QVERIFY(server.start());
+    server.enqueueResponse({200, "OK", "text/plain", {}, "https://files.example/upload"});
+    QTemporaryDir dir;
+    const QString filePath = writeTempFile(dir, QStringLiteral("report\"; name=\"other\\\r\n.txt"), "body");
+    QVERIFY(!filePath.isEmpty());
+    auto config = rawTarget(server.url());
+    config.insert(QStringLiteral("request"), QJsonObject{
+        {QStringLiteral("url"), server.url().toString()}, {QStringLiteral("method"), QStringLiteral("POST")},
+        {QStringLiteral("multipart"), QJsonObject{
+            {QStringLiteral("fileField"), QStringLiteral("fi\"le")},
+            {QStringLiteral("fields"), QJsonObject{{QStringLiteral("to\"ken"), QStringLiteral("abc")}}}}}});
+    TargetUploader uploader(config);
+    QNetworkAccessManager manager;
+    const auto result = runUpload(uploader, filePath, manager);
+    QVERIFY(result.ok);
+    const auto body = server.requests().first().body;
+    QVERIFY(body.contains("name=\"to\\\"ken\""));
+    QVERIFY(body.contains("name=\"fi\\\"le\"; filename=\"report\\\"; name=\\\"other\\\\%0D%0A.txt\"\r\n"));
+}
+
+void TargetUploaderTest::jsonScalarBodies_data()
+{
+    QTest::addColumn<QJsonValue>("fields");
+    QTest::addColumn<QByteArray>("expected");
+    QTest::newRow("string-template") << QJsonValue(QStringLiteral("${FILENAME}")) << QByteArray("\"a\\\"b.txt\"");
+    QTest::newRow("number") << QJsonValue(42) << QByteArray("42");
+    QTest::newRow("boolean") << QJsonValue(true) << QByteArray("true");
+    QTest::newRow("null") << QJsonValue(QJsonValue::Null) << QByteArray("null");
+}
+
+void TargetUploaderTest::jsonScalarBodies()
+{
+    QFETCH(QJsonValue, fields);
+    QFETCH(QByteArray, expected);
+    HttpCaptureServer server;
+    QVERIFY(server.start());
+    server.enqueueResponse({200, "OK", "text/plain", {}, "https://files.example/upload"});
+    QTemporaryDir dir;
+    const QString filePath = writeTempFile(dir, QStringLiteral("a\"b.txt"), "body");
+    auto config = rawTarget(server.url());
+    auto request = config.value(QStringLiteral("request")).toObject();
+    request.insert(QStringLiteral("type"), QStringLiteral("json"));
+    request.insert(QStringLiteral("json"), QJsonObject{{QStringLiteral("fields"), fields}});
+    config.insert(QStringLiteral("request"), request);
+    TargetUploader uploader(config);
+    QNetworkAccessManager manager;
+    const auto result = runUpload(uploader, filePath, manager);
+    QVERIFY(result.ok);
+    QCOMPARE(server.requests().first().body, expected);
+}
+
+void TargetUploaderTest::cheveretoExampleExtractsDocumentedResponse()
+{
+    QFile example(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../targets/examples/chevereto.json"));
+    QVERIFY(example.open(QIODevice::ReadOnly));
+    auto config = QJsonDocument::fromJson(example.readAll()).object();
+    HttpCaptureServer server;
+    QVERIFY(server.start());
+    server.enqueueResponse({200, "OK", "application/json", {},
+        R"({"image":{"url_viewer":"https://images.example/image/1","thumb":{"url":"https://images.example/thumb/1"}}})"});
+    auto request = config.value(QStringLiteral("request")).toObject();
+    request.insert(QStringLiteral("url"), server.url().toString());
+    config.insert(QStringLiteral("request"), request);
+    QTemporaryDir dir;
+    const QString filePath = writeTempFile(dir, QStringLiteral("image.png"), tinyPng());
+    TargetUploader uploader(config);
+    QNetworkAccessManager manager;
+    const auto result = runUpload(uploader, filePath, manager);
+    QVERIFY2(result.ok, qPrintable(result.errorMessage));
+    QCOMPARE(result.url, QStringLiteral("https://images.example/image/1"));
+    QCOMPARE(result.thumbnailUrl, QStringLiteral("https://images.example/thumb/1"));
 }
 
 int main(int argc, char **argv)

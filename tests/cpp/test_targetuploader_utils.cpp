@@ -18,6 +18,8 @@ private slots:
     void substituteJsonValueWalksNestedObjects();
     void resolveJsonPointerHandlesObjectsArraysAndEscapes();
     void resolveXmlPathHandlesSimpleXPath();
+    void encodesLiteralQueryAndFormValues();
+    void environmentExpansionDoesNotRecurse();
 };
 
 void TargetUploaderUtilsTest::objectAndFieldHelpersReturnExpectedValues()
@@ -131,6 +133,34 @@ void TargetUploaderUtilsTest::resolveXmlPathHandlesSimpleXPath()
     QCOMPARE(TargetUploaderUtils::resolveXmlPath(xml, QStringLiteral("/files/file[2]/url")),
              QStringLiteral("https://example.test/two"));
     QVERIFY(TargetUploaderUtils::resolveXmlPath(xml, QStringLiteral("/files/missing/url")).isEmpty());
+}
+
+void TargetUploaderUtilsTest::encodesLiteralQueryAndFormValues()
+{
+    const QFileInfo fileInfo(QStringLiteral("/tmp/a+b%20c.txt"));
+    const QMap<QString, QString> fields{{QStringLiteral("key+%"), QStringLiteral("a+b%20c & café")},
+                                       {QStringLiteral("name"), QStringLiteral("${FILENAME}")}};
+    const QByteArray expected("key%2B%25=a%2Bb%2520c%20%26%20caf%C3%A9&name=a%2Bb%2520c.txt");
+    QCOMPARE(TargetUploaderUtils::createFormUrlencodedBody(fields, fileInfo), expected);
+    const QString endpoint = QStringLiteral("https://example.test/upload?existing=x%2By");
+    const auto url = TargetUploaderUtils::applyQueryParameters(endpoint, fields, fileInfo);
+    QCOMPARE(url.query(QUrl::FullyEncoded).toUtf8(), QByteArray("existing=x%2By&") + expected);
+    QJsonObject jsonFields;
+    for (auto it = fields.begin(); it != fields.end(); ++it) {
+        jsonFields.insert(it.key(), it.value());
+    }
+    QCOMPARE(TargetUploaderUtils::applyQueryParameters(endpoint,
+        QJsonObject{{QStringLiteral("query"), jsonFields}}, fileInfo), url);
+}
+
+void TargetUploaderUtilsTest::environmentExpansionDoesNotRecurse()
+{
+    qputenv("IMSHARE_TEST_CYCLE", "${ENV:IMSHARE_TEST_CYCLE}");
+    qputenv("IMSHARE_TEST_INDIRECT", "${ENV:IMSHARE_TEST_CYCLE}");
+    QCOMPARE(TargetUploaderUtils::substituteEnv(QStringLiteral("x${ENV:IMSHARE_TEST_CYCLE}/${ENV:IMSHARE_TEST_INDIRECT}y")),
+             QStringLiteral("x${ENV:IMSHARE_TEST_CYCLE}/${ENV:IMSHARE_TEST_CYCLE}y"));
+    qunsetenv("IMSHARE_TEST_CYCLE");
+    qunsetenv("IMSHARE_TEST_INDIRECT");
 }
 
 QTEST_APPLESS_MAIN(TargetUploaderUtilsTest)

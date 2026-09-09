@@ -38,11 +38,16 @@ target_include_directories(runtimeuploadplugin PRIVATE
 target_compile_definitions(runtimeuploadplugin PRIVATE
     QT_NO_CAST_FROM_ASCII
     PLASMA_SHARE_UPLOADER_VERSION="${PROJECT_VERSION}"
-    PLASMA_SHARE_UPLOADER_SYSTEM_ICONS_PATH="${CMAKE_INSTALL_FULL_DATADIR}/plasma-share-uploader/icons"
-    PLASMA_SHARE_UPLOADER_SYSTEM_TARGETS_PATH="${CMAKE_INSTALL_FULL_DATADIR}/plasma-share-uploader/targets"
-    PLASMA_SHARE_UPLOADER_DEV_ICONS_PATH="${CMAKE_SOURCE_DIR}/icons"
-    PLASMA_SHARE_UPLOADER_DEV_TARGETS_PATH="${CMAKE_SOURCE_DIR}/targets"
+    PLASMA_SHARE_UPLOADER_SYSTEM_ICONS_PATH="${KDE_INSTALL_FULL_DATADIR}/plasma-share-uploader/icons"
+    PLASMA_SHARE_UPLOADER_SYSTEM_TARGETS_PATH="${KDE_INSTALL_FULL_DATADIR}/plasma-share-uploader/targets"
 )
+
+if (PLASMA_SHARE_UPLOADER_USE_SOURCE_DATA)
+    target_compile_definitions(runtimeuploadplugin PRIVATE
+        PLASMA_SHARE_UPLOADER_DEV_ICONS_PATH="${CMAKE_SOURCE_DIR}/icons"
+        PLASMA_SHARE_UPLOADER_DEV_TARGETS_PATH="${CMAKE_SOURCE_DIR}/targets"
+    )
+endif()
 
 set_target_properties(runtimeuploadplugin PROPERTIES
     OUTPUT_NAME "runtimeuploadplugin"
@@ -54,5 +59,5 @@ install(TARGETS runtimeuploadplugin
 )
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/targets
-    DESTINATION ${CMAKE_INSTALL_DATADIR}/plasma-share-uploader
+    DESTINATION ${KDE_INSTALL_DATADIR}/plasma-share-uploader
 )

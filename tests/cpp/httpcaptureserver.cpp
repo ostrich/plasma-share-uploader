@@ -126,7 +126,7 @@ void HttpCaptureServer::finalizeRequest(QTcpSocket *socket, const QByteArray &he
     wireResponse.append(response.contentType);
     wireResponse.append("\r\n");
     wireResponse.append("Content-Length: ");
-    wireResponse.append(QByteArray::number(response.body.size()));
+    wireResponse.append(QByteArray::number(response.advertisedBodySize >= 0 ? response.advertisedBodySize : response.body.size()));
     wireResponse.append("\r\n");
     for (auto it = response.headers.begin(); it != response.headers.end(); ++it) {
         wireResponse.append(it.key());

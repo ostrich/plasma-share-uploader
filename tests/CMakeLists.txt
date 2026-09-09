@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Test Widgets Xml)
+find_package(Qt6 REQUIRED COMPONENTS Test Widgets Xml Qml)
 
 set(IMSHARE_TEST_SUPPORT_SOURCES
     cpp/httpcaptureserver.cpp
@@ -53,8 +53,6 @@ function(imshare_add_cpp_test target)
         PLASMA_SHARE_UPLOADER_VERSION="${PROJECT_VERSION}"
         PLASMA_SHARE_UPLOADER_SYSTEM_ICONS_PATH="${PROJECT_SOURCE_DIR}/icons"
         PLASMA_SHARE_UPLOADER_SYSTEM_TARGETS_PATH="${PROJECT_SOURCE_DIR}/targets"
-        PLASMA_SHARE_UPLOADER_DEV_ICONS_PATH="${PROJECT_SOURCE_DIR}/icons"
-        PLASMA_SHARE_UPLOADER_DEV_TARGETS_PATH="${PROJECT_SOURCE_DIR}/targets"
         IMSHARE_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     )
     add_test(NAME ${target} COMMAND ${target})
@@ -127,3 +125,10 @@ imshare_add_cpp_test(imshare_sharejob_tests
     ${PROJECT_SOURCE_DIR}/src/targetuploader.cpp
     ${PROJECT_SOURCE_DIR}/src/targetuploader_utils.cpp
 )
+
+imshare_add_cpp_test(imshare_runtimeplugin_tests cpp/test_runtimeplugin.cpp)
+target_link_libraries(imshare_runtimeplugin_tests PRIVATE Qt6::Qml)
+target_compile_definitions(imshare_runtimeplugin_tests PRIVATE
+    IMSHARE_TEST_PLUGIN_PATH="$<TARGET_FILE:runtimeuploadplugin>"
+)
+add_dependencies(imshare_runtimeplugin_tests runtimeuploadplugin)

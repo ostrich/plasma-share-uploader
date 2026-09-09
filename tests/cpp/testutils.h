@@ -10,6 +10,19 @@
 #include <QString>
 #include <QStringList>
 #include <QTemporaryDir>
+#include <QUrl>
+
+inline QJsonObject rawTarget(const QUrl &endpoint)
+{
+    return QJsonObject{
+        {QStringLiteral("id"), QStringLiteral("raw")},
+        {QStringLiteral("displayName"), QStringLiteral("Raw Target")},
+        {QStringLiteral("request"), QJsonObject{
+            {QStringLiteral("url"), endpoint.toString()},
+            {QStringLiteral("method"), QStringLiteral("PUT")},
+            {QStringLiteral("type"), QStringLiteral("raw")}}},
+        {QStringLiteral("response"), QJsonObject{{QStringLiteral("type"), QStringLiteral("text_url")}}}};
+}
 
 inline QString testSourceDir()
 {
@@ -31,7 +44,7 @@ inline QByteArray tinyPng()
     return QByteArray::fromHex(
         "89504E470D0A1A0A"
         "0000000D49484452000000010000000108060000001F15C489"
-        "0000000A49444154789C6360000002000154A24F5D00000000"
+        "0000000B49444154789C6360000200000500017A5EAB3F00000000"
         "49454E44AE426082");
 }
 

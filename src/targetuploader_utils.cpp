@@ -86,14 +86,17 @@ void TargetUploaderUtils::applyHeaders(const QMap<QString, QString> &headers,
 QString TargetUploaderUtils::substituteEnv(const QString &value)
 {
     static const QRegularExpression pattern(QStringLiteral(R"(\$\{ENV:([A-Za-z_][A-Za-z0-9_]*)\})"));
-    QString result = value;
-    QRegularExpressionMatch match = pattern.match(result);
-    while (match.hasMatch()) {
-        const QString varName = match.captured(1);
-        const QString envValue = QProcessEnvironment::systemEnvironment().value(varName);
-        result.replace(match.captured(0), envValue);
-        match = pattern.match(result);
+    const QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+    QString result;
+    qsizetype offset = 0;
+    auto matches = pattern.globalMatch(value);
+    while (matches.hasNext()) {
+        const auto match = matches.next();
+        result += QStringView(value).mid(offset, match.capturedStart() - offset);
+        result += environment.value(match.captured(1));
+        offset = match.capturedEnd();
     }
+    result += QStringView(value).mid(offset);
     return result;
 }
 
@@ -137,7 +140,8 @@ QUrl TargetUploaderUtils::applyQueryParameters(const QString &urlTemplate,
     QUrlQuery query(url);
     const QJsonObject fields = queryValue.toObject();
     for (auto it = fields.begin(); it != fields.end(); ++it) {
-        query.addQueryItem(it.key(), substituteRequestValue(it.value().toString(), fileInfo));
+        query.addQueryItem(QString::fromLatin1(QUrl::toPercentEncoding(it.key())),
+                           QString::fromLatin1(QUrl::toPercentEncoding(substituteRequestValue(it.value().toString(), fileInfo))));
     }
     url.setQuery(query);
     return url;
@@ -150,7 +154,8 @@ QUrl TargetUploaderUtils::applyQueryParameters(const QString &urlTemplate,
     QUrl url = QUrl::fromUserInput(applyUrlTemplate(urlTemplate, fileInfo));
     QUrlQuery query(url);
     for (auto it = queryItems.begin(); it != queryItems.end(); ++it) {
-        query.addQueryItem(it.key(), substituteRequestValue(it.value(), fileInfo));
+        query.addQueryItem(QString::fromLatin1(QUrl::toPercentEncoding(it.key())),
+                           QString::fromLatin1(QUrl::toPercentEncoding(substituteRequestValue(it.value(), fileInfo))));
     }
     url.setQuery(query);
     return url;
@@ -158,11 +163,16 @@ QUrl TargetUploaderUtils::applyQueryParameters(const QString &urlTemplate,
 
 QByteArray TargetUploaderUtils::createFormUrlencodedBody(const QMap<QString, QString> &fields, const QFileInfo &fileInfo)
 {
-    QUrlQuery query;
+    QByteArray body;
     for (auto it = fields.begin(); it != fields.end(); ++it) {
-        query.addQueryItem(it.key(), substituteRequestValue(it.value(), fileInfo));
+        if (!body.isEmpty()) {
+            body += '&';
+        }
+        body += QUrl::toPercentEncoding(it.key());
+        body += '=';
+        body += QUrl::toPercentEncoding(substituteRequestValue(it.value(), fileInfo));
     }
-    return query.toString(QUrl::FullyEncoded).toUtf8();
+    return body;
 }
 
 QJsonValue TargetUploaderUtils::substituteJsonValue(const QJsonValue &value, const QFileInfo &fileInfo)

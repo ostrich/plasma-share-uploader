@@ -21,6 +21,7 @@ struct QueuedHttpResponse {
     QByteArray contentType = "text/plain";
     QHash<QByteArray, QByteArray> headers;
     QByteArray body;
+    qint64 advertisedBodySize = -1;
 };
 
 class HttpCaptureServer final : public QTcpServer

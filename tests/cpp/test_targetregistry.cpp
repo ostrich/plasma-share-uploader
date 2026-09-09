@@ -30,6 +30,8 @@ private slots:
     void validatorAccumulatesMultipleDiagnosticsForOneTarget();
     void constraintMatcherFiltersByMimeType();
     void constraintMatcherFiltersByExtension();
+    void validatesRegexExtractors_data();
+    void validatesRegexExtractors();
 };
 
 void TargetRegistryTest::loadsBundledSystemTargets()
@@ -421,6 +423,45 @@ void TargetRegistryTest::constraintMatcherFiltersByExtension()
 
     QVERIFY(ConstraintMatcher::targetMatchesFiles(imageTarget, QStringList{imagePath}));
     QVERIFY(!ConstraintMatcher::targetMatchesFiles(imageTarget, QStringList{textPath}));
+}
+
+void TargetRegistryTest::validatesRegexExtractors_data()
+{
+    QTest::addColumn<QString>("pattern");
+    QTest::addColumn<QJsonValue>("group");
+    QTest::addColumn<bool>("valid");
+    QTest::newRow("invalid-pattern") << QStringLiteral("(") << QJsonValue(1) << false;
+    QTest::newRow("missing-capture") << QStringLiteral("https://.*") << QJsonValue(1) << false;
+    QTest::newRow("out-of-range") << QStringLiteral("(https://.*)") << QJsonValue(2) << false;
+    QTest::newRow("fractional") << QStringLiteral("(https://.*)") << QJsonValue(0.5) << false;
+    QTest::newRow("whole-match") << QStringLiteral("https://.*") << QJsonValue(0) << true;
+    QTest::newRow("capture") << QStringLiteral("(https://.*)") << QJsonValue(1) << true;
+}
+
+void TargetRegistryTest::validatesRegexExtractors()
+{
+    QFETCH(QString, pattern);
+    QFETCH(QJsonValue, group);
+    QFETCH(bool, valid);
+    const QJsonObject extractor{{QStringLiteral("type"), QStringLiteral("regex")},
+                                {QStringLiteral("pattern"), pattern}, {QStringLiteral("group"), group}};
+    for (const auto &field : {QString(), QStringLiteral("error"), QStringLiteral("thumbnail"), QStringLiteral("deletion")}) {
+        auto config = rawTarget(QUrl(QStringLiteral("https://example.test/upload")));
+        auto response = config.value(QStringLiteral("response")).toObject();
+        if (field.isEmpty()) {
+            response = extractor;
+        } else {
+            response.insert(field, extractor);
+        }
+        config.insert(QStringLiteral("response"), response);
+        QList<TargetDiagnostic> diagnostics;
+        QCOMPARE(TargetConfigValidator::validateTarget(config, &diagnostics), valid);
+        QCOMPARE(diagnostics.isEmpty(), valid);
+        if (!valid) {
+            QVERIFY(diagnostics.first().jsonPath.endsWith(QStringLiteral("/pattern"))
+                    || diagnostics.first().jsonPath.endsWith(QStringLiteral("/group")));
+        }
+    }
 }
 
 QTEST_APPLESS_MAIN(TargetRegistryTest)

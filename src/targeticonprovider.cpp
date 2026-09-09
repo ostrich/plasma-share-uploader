@@ -16,11 +16,6 @@
 namespace {
 constexpr int kButtonIconExtent = 36;
 
-QString defaultDevIconsPath()
-{
-    return QStringLiteral(PLASMA_SHARE_UPLOADER_DEV_ICONS_PATH);
-}
-
 QString defaultSystemIconsPath()
 {
     return QStringLiteral(PLASMA_SHARE_UPLOADER_SYSTEM_ICONS_PATH);
@@ -187,10 +182,12 @@ QString TargetIconProvider::systemIconsPath() const
         return m_systemIconsPath;
     }
 
-    const QString devPath = defaultDevIconsPath();
+#ifdef PLASMA_SHARE_UPLOADER_DEV_ICONS_PATH
+    const QString devPath = QStringLiteral(PLASMA_SHARE_UPLOADER_DEV_ICONS_PATH);
     if (QDir(devPath).exists()) {
         return devPath;
     }
+#endif
 
     return defaultSystemIconsPath();
 }

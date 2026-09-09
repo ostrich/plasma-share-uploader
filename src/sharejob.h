@@ -7,23 +7,29 @@
 
 #include <Purpose/Job>
 #include <QNetworkAccessManager>
+#include <QPointer>
 #include <QStringList>
+
+class TargetPickerDialog;
 
 class ShareJob final : public Purpose::Job
 {
     Q_OBJECT
 public:
     explicit ShareJob(const QByteArray &configJson, QObject *parent = nullptr);
+    ~ShareJob() override;
 
     void start() override;
 
 private:
     void startNextUpload();
-    bool ensureTargetSelected();
+    void selectTarget();
+    void uploadPreparedFile();
+    void publishResults();
     void cleanupTempArtifacts();
     void finishCancelled();
     void finishError(const QString &message);
-    bool stageInputFiles();
+    QString stageInputFiles();
 
     ParsedTargetConfig m_targetConfig;
     TargetUploader m_uploader;
@@ -31,7 +37,11 @@ private:
     QStringList m_originalFiles;
     QList<UploadResult> m_uploadResults;
     QStringList m_uploadedUrls;
-    QStringList m_tempDirs;
+    std::unique_ptr<QTemporaryDir> m_staging;
+    PreUploadProcessor::Result m_prepared;
+    QPointer<QObject> m_preprocessing;
+    QPointer<TargetPickerDialog> m_picker;
+    bool m_started = false;
     int m_nextIndex = 0;
     QNetworkAccessManager m_network;
 };

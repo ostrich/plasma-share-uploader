@@ -10,6 +10,8 @@ GPL-3.0-or-later.
 
 ## Build
 
+Requires Qt 6, KF6 Purpose, CoreAddons, Notifications, CMake, and Extra CMake Modules.
+
 ```sh
 cmake -S . -B build
 cmake --build build
@@ -24,7 +26,7 @@ ctest --test-dir build --output-on-failure
 ```
 
 The test suite includes C++ unit and integration tests that use a local in-process HTTP
-server. It does not contact external upload services.
+server, plus a Purpose controller test requiring Qt QML. It does not contact external upload services.
 
 ## Install
 
@@ -32,14 +34,22 @@ server. It does not contact external upload services.
 cmake --install build
 ```
 
-Plugin installs to the Purpose plugin directory (`${KDE_INSTALL_QTPLUGINDIR}/kf6/purpose`).
-The package also installs bundled targets under `/usr/share/plasma-share-uploader/targets/`.
+The plugin installs to Qt's system plugin search path under `kf6/purpose`, using
+[`KDEInstallDirs6`](https://api.kde.org/ecm/kde-module/KDEInstallDirs6.html). Installation there usually requires administrator privileges.
+Bundled targets install under `${CMAKE_INSTALL_PREFIX}/share/plasma-share-uploader/targets/`.
+The default prefix follows KDE's installation (normally `/usr`, also used by the
+Arch package); set `CMAKE_INSTALL_PREFIX` at configure time to override it.
+For a custom plugin location, set `KDE_INSTALL_QTPLUGINDIR` at configure time and
+add that directory to the host application's `QT_PLUGIN_PATH`.
 Restart Dolphin/Gwenview/other Purpose-Share-enabled app after installing so the `Upload To...` Share action shows up.
+
+Installed builds use installed data. To use targets and icons from the checkout
+during development, configure with `-DPLASMA_SHARE_UPLOADER_USE_SOURCE_DATA=ON`.
 
 ## Targets
 
 Targets are loaded at runtime from:
-- system defaults: `/usr/share/plasma-share-uploader/targets/*.json`
+- system defaults: `${CMAKE_INSTALL_PREFIX}/share/plasma-share-uploader/targets/*.json`
 - user overrides/custom targets: `~/.config/plasma-share-uploader/targets/*.json`
 - user state: `~/.config/plasma-share-uploader/state.json`
 
@@ -88,7 +98,7 @@ Optional fields:
 - `type` (optional): `multipart` (default), `raw`, `form_urlencoded`, or `json`.
 
 Request string placeholders:
-- `${ENV:VARNAME}`: expand from the environment.
+- `${ENV:VARNAME}`: expand from the environment once; environment references inside expanded values are treated literally.
 - `${FILENAME}`: expand to the local file name.
 
 Multipart uploads:
@@ -142,6 +152,7 @@ Behavior:
 - No match: upload the original file.
 - Non-zero exit, timeout, or missing output file: fail that upload and surface stderr.
 - Original user files are never modified.
+- Commands run asynchronously so the host application's UI remains responsive.
 
 If you want a catch-all fallback rule, use `*/*` and place it last.
 
@@ -149,7 +160,7 @@ If you want a catch-all fallback rule, use `*/*` and place it last.
 
 `response` must include a `type`:
 - `text_url`: response body is the URL.
-- `regex`: use `pattern` and optional `group` to extract URL from response text.
+- `regex`: use a valid `pattern` and optional `group` (default `1`, or `0` for the whole match) to extract URL from response text. The group must exist in the pattern.
 - `json_pointer`: use `pointer` (must start with `/`) to locate a string URL in a JSON response.
 - `header`: use `name` to read a response header.
 - `redirect_url`: use the redirect target URL, or the final reply URL if no redirect target is reported.
@@ -175,6 +186,9 @@ Each `response` object contains:
 - `responseUrl`
 - `headers` with lowercased header names
 - `responseText`
+
+If a later file fails, the job reports the failure while preserving completed
+uploads in its output and copying their URLs to the clipboard.
 
 ### Example target file
 
