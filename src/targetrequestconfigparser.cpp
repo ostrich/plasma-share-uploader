@@ -18,6 +18,31 @@ bool appendDiagnostic(QList<TargetDiagnostic> *diagnostics,
     return false;
 }
 
+bool validateWalletReferences(const QJsonValue &value, const QString &path, QList<TargetDiagnostic> *diagnostics)
+{
+    bool ok = true;
+    if (value.isString()) {
+        const auto text = value.toString();
+        const QRegularExpression keyPattern(QStringLiteral("^[A-Za-z0-9_.-]+$"));
+        qsizetype offset = 0;
+        while ((offset = text.indexOf(QStringLiteral("${WALLET:"), offset)) >= 0) {
+            const auto end = text.indexOf(QLatin1Char('}'), offset);
+            if (end < 0 || !keyPattern.match(text.mid(offset + 9, end - offset - 9)).hasMatch()) {
+                return appendDiagnostic(diagnostics, path, QStringLiteral("request.wallet.invalid"),
+                    QStringLiteral("Wallet references must use ${WALLET:name} with letters, digits, dot, dash, or underscore."));
+            }
+            offset = end + 1;
+        }
+    } else if (value.isObject()) {
+        const auto object = value.toObject();
+        for (auto it = object.begin(); it != object.end(); ++it) ok = validateWalletReferences(it.value(), path + QLatin1Char('/') + it.key(), diagnostics) && ok;
+    } else if (value.isArray()) {
+        const auto array = value.toArray();
+        for (int i = 0; i < array.size(); ++i) ok = validateWalletReferences(array.at(i), path + QLatin1Char('/') + QString::number(i), diagnostics) && ok;
+    }
+    return ok;
+}
+
 QJsonObject objectValue(const QJsonObject &parent, const char *key)
 {
     const QJsonValue value = parent.value(QLatin1StringView(key));
@@ -149,7 +174,7 @@ bool TargetRequestConfigParser::parse(const QJsonObject &target, ParsedRequestCo
         local.type = RequestBodyType::Json;
     }
 
-    bool ok = true;
+    bool ok = validateWalletReferences(request, QStringLiteral("/request"), diagnostics);
     if (local.url.isEmpty()) {
         ok = appendDiagnostic(diagnostics,
                               QStringLiteral("/request/url"),

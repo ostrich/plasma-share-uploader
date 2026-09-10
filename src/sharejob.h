@@ -4,6 +4,7 @@
 #include "targetconfigparser.h"
 #include "targetdefinition.h"
 #include "targetuploader.h"
+#include "credentialstore.h"
 
 #include <Purpose/Job>
 #include <QNetworkAccessManager>
@@ -16,13 +17,14 @@ class ShareJob final : public Purpose::Job
 {
     Q_OBJECT
 public:
-    explicit ShareJob(const QByteArray &configJson, QObject *parent = nullptr);
+    explicit ShareJob(const QByteArray &configJson, QObject *parent = nullptr, CredentialStore *credentials = nullptr);
     ~ShareJob() override;
 
     void start() override;
 
 private:
     void startNextUpload();
+    void prepareTarget();
     void selectTarget();
     void uploadPreparedFile();
     void publishResults();
@@ -44,4 +46,5 @@ private:
     bool m_started = false;
     int m_nextIndex = 0;
     QNetworkAccessManager m_network;
+    CredentialStore *m_credentials;
 };

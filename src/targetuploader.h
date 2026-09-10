@@ -42,9 +42,16 @@ public:
 
     QNetworkReply *upload(const QString &filePath, QNetworkAccessManager *manager);
     UploadResult parseReply(QNetworkReply *reply) const;
+    UploadResult parseResponse(const UploadResponseInfo &response) const;
+    void setSecrets(const QMap<QString, QString> &secrets) { m_secrets = secrets; }
+    QString lastError() const { return m_lastError; }
 
 private:
     ParsedTargetConfig m_targetConfig;
+    QMap<QString, QString> m_secrets;
+    QString m_lastError;
     bool m_requestConfigValid = false;
     bool m_responseConfigValid = false;
 };
+
+Q_DECLARE_METATYPE(UploadResult)

@@ -27,15 +27,19 @@ void RuntimePluginTest::controllerLifecycle_data()
 {
     QTest::addColumn<bool>("cancelPicker");
     QTest::addColumn<bool>("linkedPreset");
-    QTest::newRow("cancel") << true << false;
-    QTest::newRow("upload") << false << false;
-    QTest::newRow("upload-preset-link") << false << true;
+    QTest::addColumn<bool>("startEmpty");
+    QTest::newRow("cancel") << true << false << false;
+    QTest::newRow("upload") << false << false << false;
+    QTest::newRow("upload-preset-link") << false << true << false;
+    QTest::newRow("empty-cancel") << true << false << true;
+    QTest::newRow("empty-reload-upload") << false << false << true;
 }
 
 void RuntimePluginTest::controllerLifecycle()
 {
     QFETCH(bool, cancelPicker);
     QFETCH(bool, linkedPreset);
+    QFETCH(bool, startEmpty);
     HttpCaptureServer server;
     QVERIFY(server.start());
     server.enqueueResponse({200, "OK", "text/plain", {}, "https://files.example/plugin"});
@@ -57,6 +61,7 @@ void RuntimePluginTest::controllerLifecycle()
     if (linkedPreset) {
         QVERIFY(QFile::link(presetFile, activeFile));
     }
+    if (startEmpty) QVERIFY(QFile::remove(activeFile));
 
     Purpose::AlternativesModel model;
     model.setPluginType(QStringLiteral("ShareUrl"));
@@ -101,6 +106,15 @@ void RuntimePluginTest::controllerLifecycle()
     QVERIFY(QFile::remove(source));
     QTRY_VERIFY(qobject_cast<QDialog *>(QApplication::activeModalWidget()));
     auto *picker = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+    QVERIFY(picker->findChild<QPushButton *>(QStringLiteral("configureTargets"))->isEnabled());
+    if (startEmpty && !cancelPicker) {
+        QFile added(activeFile); QVERIFY(added.open(QIODevice::WriteOnly));
+        added.write(QJsonDocument(config).toJson()); added.close();
+        picker->findChild<QPushButton *>(QStringLiteral("reloadTargets"))->click();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        QTRY_VERIFY(qobject_cast<QDialog *>(QApplication::activeModalWidget()));
+        picker = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+    }
     if (cancelPicker) {
         picker->reject();
     } else {

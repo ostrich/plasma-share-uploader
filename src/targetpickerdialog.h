@@ -17,6 +17,9 @@ public:
 
     TargetDefinition selectedTarget() const;
 
+signals:
+    void reloadRequested();
+
 private:
     TargetDefinition m_selectedTarget;
     TargetIconProvider *m_iconProvider = nullptr;

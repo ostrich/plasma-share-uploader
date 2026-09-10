@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Upload Targets
+Comment=Configure upload services for the Plasma Share menu
+Exec=plasma-share-uploader-config
+Icon=document-send
+Terminal=false
+Categories=Qt;KDE;Settings;
+Keywords=upload;share;targets;configuration;

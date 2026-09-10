@@ -93,7 +93,7 @@ public:
         });
         connect(&m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
             if (error == QProcess::FailedToStart) {
-                finish(QStringLiteral("Failed to start pre-upload command: %1").arg(m_process.errorString()));
+                finish(QStringLiteral("Failed to start pre-upload command '%1': %2").arg(m_process.program(), m_process.errorString()));
             }
         });
         connect(&m_process, &QProcess::finished, this, [this](int exitCode, QProcess::ExitStatus status) {

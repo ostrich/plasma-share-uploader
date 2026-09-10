@@ -17,6 +17,7 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Widgets Xml)
 find_package(KF6CoreAddons REQUIRED)
 find_package(KF6Purpose REQUIRED)
 find_package(KF6Notifications REQUIRED)
+find_package(KF6Wallet REQUIRED)
 include(CTest)
 
 option(PLASMA_SHARE_UPLOADER_USE_SOURCE_DATA "Load targets and icons from the source checkout (development only)" OFF)

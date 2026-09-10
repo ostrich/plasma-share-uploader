@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+Added the **Upload Targets** configuration application and a Configure action in
+the Share picker, including when no compatible targets are available. The app
+manages the existing active-directory model, edits the complete current target
+format, imports/exports single target JSONs, and tests unsaved drafts with local
+validation, response fixtures, preprocessing previews, and explicit uploads.
+
+Managed credentials use KWallet and `${WALLET:name}` references. The plugin and
+manager share credential resolution and the upload engine; missing environment or
+wallet values stop uploads. KF6 Wallet is now a build/runtime dependency. Existing
+JSON definitions continue to work without conversion; definitions using wallet
+references require this updated plugin.
+
+See the [configuration app guide](docs/configuration-app.md).
+
 ## 0.3.0
 
 ### Target API corrections

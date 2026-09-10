@@ -10,7 +10,7 @@ GPL-3.0-or-later.
 
 ## Build
 
-Requires Qt 6, KF6 Purpose, CoreAddons, Notifications, CMake, and Extra CMake Modules.
+Requires Qt 6, KF6 Purpose, CoreAddons, Notifications, Wallet, CMake, and Extra CMake Modules.
 
 ```sh
 cmake -S . -B build
@@ -37,6 +37,8 @@ cmake --install build
 The plugin installs to Qt's system plugin search path under `kf6/purpose`, using
 [`KDEInstallDirs6`](https://api.kde.org/ecm/kde-module/KDEInstallDirs6.html). Installation there usually requires administrator privileges.
 Bundled targets install under `${CMAKE_INSTALL_PREFIX}/share/plasma-share-uploader/targets/`.
+The `plasma-share-uploader-config` executable and **Upload Targets** desktop launcher
+are installed alongside the plugin.
 The default prefix follows KDE's installation (normally `/usr`, also used by the
 Arch package); set `CMAKE_INSTALL_PREFIX` at configure time to override it.
 For a custom plugin location, set `KDE_INSTALL_QTPLUGINDIR` at configure time and
@@ -93,7 +95,21 @@ broken links produce file-specific diagnostics in the picker.
 
 For updating an existing installation, see [the release notes](CHANGELOG.md).
 
-### Target format
+## Configuration app
+
+Open **Upload Targets** from the application menu, run `plasma-share-uploader-config`,
+or choose **Configure...** in the Share picker. Manage presets and custom targets,
+edit every supported target field or the complete JSON, store credentials in
+KWallet, and import/export our JSON format. Changes use explicit Save; new targets
+and imports start as disabled drafts.
+
+The Test page provides local validation, offline response parsing, preprocessing
+previews, and explicit test uploads through the same engine as the plugin.
+See the [configuration app guide](docs/configuration-app.md) for workflows and
+the [configuration application plan](docs/configuration-app-plan.md) for later work.
+
+## Target format
+
 
 Each target file is a single JSON object with these required fields:
 - `id`: unique lowercase identifier; `[a-z0-9][a-z0-9_-]*`.
@@ -112,21 +128,27 @@ Optional fields:
 ### Request formats
 
 `request` includes:
-- `url`: upload endpoint URL. Supports `${ENV:VAR}` substitution, and `${FILENAME}` in URL paths.
+- `url`: upload endpoint URL. Supports environment/wallet substitution, and `${FILENAME}` in URL paths.
 - `method`: HTTP method. `multipart`, `raw`, `form_urlencoded`, and `json` currently support `POST` and `PUT` as documented below.
 - `query`: optional query-string parameter map.
 - `headers`: optional header map.
 - `type` (optional): `multipart` (default), `raw`, `form_urlencoded`, or `json`.
 
 Request string placeholders:
-- `${ENV:VARNAME}`: expand from the environment once; environment references inside expanded values are treated literally.
+- `${ENV:VARNAME}`: expand from the environment. Missing/empty values stop uploads from the manager or Share plugin.
+- `${WALLET:name}`: resolve a managed KWallet credential; names accept letters, digits, dots, dashes, and underscores. See [credentials](docs/configuration-app.md#credentials).
 - `${FILENAME}`: expand to the local file name.
+
+All substitutions run once; placeholder-looking text inside expanded values stays
+literal. These tokens apply to endpoint, header/query values, multipart/form field
+values, and JSON string values. They do not apply to field names, raw content type,
+raw file contents, or preprocessing commands.
 
 Multipart uploads:
 - `request.type`: `multipart` (or omitted).
 - `request.multipart.fileField`: form field name for the file.
 - `request.multipart.fields`: optional extra form fields (string values only).
-  Field values support `${ENV:VARNAME}` and `${FILENAME}`.
+  Field values support the request string placeholders above.
 
 Raw uploads:
 - `request.type`: `raw`.
@@ -135,16 +157,16 @@ Raw uploads:
 Form URL encoded uploads:
 - `request.type`: `form_urlencoded`.
 - `request.formUrlencoded.fields`: required string map sent as `application/x-www-form-urlencoded`.
-  Field values support `${ENV:VARNAME}` and `${FILENAME}`.
+  Field values support the request string placeholders above.
 
 JSON uploads:
 - `request.type`: `json`.
 - `request.json.fields`: required JSON value written as `application/json`.
-  String values inside the JSON body support `${ENV:VARNAME}` and `${FILENAME}`.
+  String values inside the JSON body support the request string placeholders above.
 
 Headers and query parameters:
-- `request.headers`: string map. Values support `${ENV:VARNAME}` and `${FILENAME}`.
-- `request.query`: string map. Values support `${ENV:VARNAME}` and `${FILENAME}`.
+- `request.headers`: string map. Values support the request string placeholders above.
+- `request.query`: string map. Values support the request string placeholders above.
 
 ### Pre-upload commands
 
@@ -160,6 +182,7 @@ Each `preUpload` entry must include:
 - `commands`: non-empty array of command objects.
   - `inplace_copy` rules may contain one or more commands.
   - `output_file` rules must contain exactly one command.
+- `timeoutMs` (optional): timeout for each command, in milliseconds; defaults to 30000.
 
 Each command object must include:
 - `argv`: non-empty array of command arguments. Commands are executed directly without a shell.

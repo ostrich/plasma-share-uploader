@@ -1,6 +1,7 @@
 #include "targetuploader.h"
 
 #include "targetconfigparser.h"
+#include "credentialstore.h"
 #include "targetuploader_utils.h"
 
 #include <QBuffer>
@@ -53,10 +54,10 @@ UploadResponseInfo buildResponseInfo(QNetworkReply *reply, const QString &respon
     return info;
 }
 
-QByteArray createJsonBody(const QJsonObject &jsonConfig, const QFileInfo &fileInfo)
+QByteArray createJsonBody(const QJsonObject &jsonConfig, const QFileInfo &fileInfo, const QMap<QString, QString> &secrets)
 {
     const QJsonValue fieldsValue = jsonConfig.value(QStringLiteral("fields"));
-    const QJsonValue substituted = TargetUploaderUtils::substituteJsonValue(fieldsValue, fileInfo);
+    const QJsonValue substituted = TargetUploaderUtils::substituteJsonValue(fieldsValue, fileInfo, secrets);
     if (substituted.isObject()) {
         return QJsonDocument(substituted.toObject()).toJson(QJsonDocument::Compact);
     }
@@ -190,6 +191,13 @@ QString TargetUploader::displayName() const
 
 QNetworkReply *TargetUploader::upload(const QString &filePath, QNetworkAccessManager *manager)
 {
+    m_lastError = QStringLiteral("Could not start upload. Check the configuration and selected file.");
+    for (const auto &key : CredentialStore::walletKeys(m_targetConfig.request)) {
+        if (m_secrets.value(key).isEmpty()) {
+            m_lastError = QStringLiteral("Credential '%1' has not been resolved.").arg(key);
+            return nullptr;
+        }
+    }
     if (!manager) {
         return nullptr;
     }
@@ -203,7 +211,7 @@ QNetworkReply *TargetUploader::upload(const QString &filePath, QNetworkAccessMan
         return nullptr;
     }
 
-    QNetworkRequest requestObj{TargetUploaderUtils::applyQueryParameters(m_targetConfig.request.url, m_targetConfig.request.query, fileInfo)};
+    QNetworkRequest requestObj{TargetUploaderUtils::applyQueryParameters(m_targetConfig.request.url, m_targetConfig.request.query, fileInfo, m_secrets)};
     requestObj.setHeader(
         QNetworkRequest::UserAgentHeader,
         QStringLiteral("plasma-share-uploader/" PLASMA_SHARE_UPLOADER_VERSION));
@@ -211,7 +219,7 @@ QNetworkReply *TargetUploader::upload(const QString &filePath, QNetworkAccessMan
     if (m_targetConfig.response.success.valid && m_targetConfig.response.success.type == ResponseExtractorType::RedirectUrl) {
         requestObj.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
     }
-    TargetUploaderUtils::applyHeaders(m_targetConfig.request.headers, fileInfo, requestObj);
+    TargetUploaderUtils::applyHeaders(m_targetConfig.request.headers, fileInfo, requestObj, m_secrets);
 
     if (m_targetConfig.request.type == RequestBodyType::Raw) {
         auto *file = new QFile(filePath);
@@ -252,7 +260,7 @@ QNetworkReply *TargetUploader::upload(const QString &filePath, QNetworkAccessMan
             QHttpPart fieldPart;
             const QString disposition = QStringLiteral("form-data; name=\"%1\"").arg(multipartParameter(it.key()));
             fieldPart.setHeader(QNetworkRequest::ContentDispositionHeader, disposition);
-            fieldPart.setBody(TargetUploaderUtils::substituteRequestValue(it.value(), fileInfo).toUtf8());
+            fieldPart.setBody(TargetUploaderUtils::substituteRequestValue(it.value(), fileInfo, m_secrets).toUtf8());
             multi->append(fieldPart);
         }
 
@@ -277,7 +285,7 @@ QNetworkReply *TargetUploader::upload(const QString &filePath, QNetworkAccessMan
     }
 
     if (m_targetConfig.request.type == RequestBodyType::FormUrlencoded) {
-        const QByteArray body = TargetUploaderUtils::createFormUrlencodedBody(m_targetConfig.request.formFields, fileInfo);
+        const QByteArray body = TargetUploaderUtils::createFormUrlencodedBody(m_targetConfig.request.formFields, fileInfo, m_secrets);
         auto *buffer = new QBuffer;
         buffer->setData(body);
         buffer->open(QIODevice::ReadOnly);
@@ -298,7 +306,7 @@ QNetworkReply *TargetUploader::upload(const QString &filePath, QNetworkAccessMan
     }
 
     if (m_targetConfig.request.type == RequestBodyType::Json) {
-        const QByteArray body = createJsonBody(QJsonObject{{QStringLiteral("fields"), m_targetConfig.request.jsonFields}}, fileInfo);
+        const QByteArray body = createJsonBody(QJsonObject{{QStringLiteral("fields"), m_targetConfig.request.jsonFields}}, fileInfo, m_secrets);
         auto *buffer = new QBuffer;
         buffer->setData(body);
         buffer->open(QIODevice::ReadOnly);
@@ -329,7 +337,7 @@ UploadResult TargetUploader::parseReply(QNetworkReply *reply) const
         return result;
     }
 
-    const QByteArray body = reply->readAll().trimmed();
+    const QByteArray body = reply->isOpen() ? reply->readAll().trimmed() : QByteArray{};
     const QString responseText = QString::fromUtf8(body);
     const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     result.responseInfo = buildResponseInfo(reply, responseText);
@@ -395,4 +403,37 @@ UploadResult TargetUploader::parseReply(QNetworkReply *reply) const
 
     result.errorMessage = QStringLiteral("Unsupported response parser.");
     return result;
+}
+
+
+UploadResult TargetUploader::parseResponse(const UploadResponseInfo &response) const
+{
+    // Feed offline fixtures through the exact network-reply parser used by uploads.
+    class FixtureReply final : public QNetworkReply {
+    public:
+        explicit FixtureReply(const UploadResponseInfo &info) : body(info.responseText.toUtf8()) {
+            open(QIODevice::ReadOnly);
+            setUrl(QUrl(info.responseUrl));
+            setAttribute(QNetworkRequest::HttpStatusCodeAttribute, info.statusCode);
+            setAttribute(QNetworkRequest::HttpReasonPhraseAttribute, info.reasonPhrase);
+            for (auto it = info.headers.begin(); it != info.headers.end(); ++it) {
+                setRawHeader(it.key().toUtf8(), it.value().toString().toUtf8());
+                if (it.key().compare(QStringLiteral("location"), Qt::CaseInsensitive) == 0)
+                    setAttribute(QNetworkRequest::RedirectionTargetAttribute, QUrl(it.value().toString()));
+            }
+            setFinished(true);
+        }
+        void abort() override {}
+        qint64 bytesAvailable() const override { return body.size() - offset + QNetworkReply::bytesAvailable(); }
+        qint64 readData(char *data, qint64 size) override {
+            const auto count = qMin(size, body.size() - offset);
+            if (count <= 0) return -1;
+            memcpy(data, body.constData() + offset, size_t(count));
+            offset += count;
+            return count;
+        }
+        QByteArray body;
+        qint64 offset = 0;
+    } reply(response);
+    return parseReply(&reply);
 }

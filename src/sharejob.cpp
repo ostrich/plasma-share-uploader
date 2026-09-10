@@ -20,9 +20,10 @@
 #include <QTemporaryDir>
 #include <QTimer>
 
-ShareJob::ShareJob(const QByteArray &configJson, QObject *parent)
+ShareJob::ShareJob(const QByteArray &configJson, QObject *parent, CredentialStore *credentials)
     : Purpose::Job(parent)
     , m_uploader()
+    , m_credentials(credentials ? credentials : new CredentialStore(this))
 {
     const QJsonObject configObject = QJsonDocument::fromJson(configJson).object();
     if (!configObject.isEmpty()) {
@@ -58,10 +59,25 @@ void ShareJob::start()
         } else if (m_targetConfig.core.id.isEmpty()) {
             selectTarget();
         } else {
-            m_uploader.setConfig(m_targetConfig);
-            startNextUpload();
+            prepareTarget();
         }
     });
+}
+
+void ShareJob::prepareTarget()
+{
+    const auto missing = CredentialStore::missingEnvironment(m_targetConfig.request);
+    if (!missing.isEmpty()) {
+        finishError(QStringLiteral("Missing environment values: %1").arg(missing.join(QStringLiteral(", "))));
+        return;
+    }
+    m_credentials->read(CredentialStore::walletKeys(m_targetConfig.request), this,
+        [this](CredentialStore::Values values, const QString &error) {
+            if (!error.isEmpty()) { finishError(error); return; }
+            m_uploader.setConfig(m_targetConfig);
+            m_uploader.setSecrets(values);
+            startNextUpload();
+        });
 }
 
 void ShareJob::publishResults()
@@ -137,7 +153,7 @@ void ShareJob::uploadPreparedFile()
     const QString sourcePath = m_originalFiles.value(m_nextIndex, m_files.at(m_nextIndex));
     QNetworkReply *reply = m_uploader.upload(m_prepared.uploadPath, &m_network);
     if (!reply) {
-        finishError(QStringLiteral("Failed to start upload for %1").arg(sourcePath));
+        finishError(QStringLiteral("%1: %2").arg(sourcePath, m_uploader.lastError()));
         return;
     }
 
@@ -220,15 +236,15 @@ void ShareJob::selectTarget()
     const TargetRegistry::LoadResult loadResult = registry.loadTargets();
     const QList<TargetDefinition> compatibleTargets = ConstraintMatcher::filterTargets(loadResult.targets, m_files);
 
-    if (compatibleTargets.isEmpty()) {
-        finishError(loadResult.targets.isEmpty()
-                        ? QStringLiteral("No upload targets are currently available.")
-                        : QStringLiteral("No upload targets match the selected files."));
-        return;
-    }
-
     QWidget *parentWidget = QApplication::activeWindow();
     m_picker = new TargetPickerDialog(compatibleTargets, loadResult.diagnostics, parentWidget);
+    connect(m_picker, &TargetPickerDialog::reloadRequested, this, [this]() {
+        m_picker->disconnect(this);
+        m_picker->hide();
+        m_picker->deleteLater();
+        m_picker.clear();
+        selectTarget();
+    });
     connect(m_picker, &QDialog::finished, this, [this](int result) {
         const TargetDefinition selectedTarget = m_picker->selectedTarget();
         m_picker->deleteLater();
@@ -239,8 +255,7 @@ void ShareJob::selectTarget()
             finishError(QStringLiteral("No upload target selected."));
         } else {
             m_targetConfig = selectedTarget.target;
-            m_uploader.setConfig(m_targetConfig);
-            startNextUpload();
+            prepareTarget();
         }
     });
     m_picker->open();

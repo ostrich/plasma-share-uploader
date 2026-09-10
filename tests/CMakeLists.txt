@@ -4,25 +4,6 @@ set(IMSHARE_TEST_SUPPORT_SOURCES
     cpp/httpcaptureserver.cpp
 )
 
-set(IMSHARE_CORE_SOURCES
-    ${PROJECT_SOURCE_DIR}/src/preuploadprocessor.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetpreuploadconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetcoreconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetconfigvalidator.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetdefinition.cpp
-    ${PROJECT_SOURCE_DIR}/src/targeticonprovider.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetregistry.cpp
-    ${PROJECT_SOURCE_DIR}/src/constraintmatcher.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetpickerdialog.cpp
-    ${PROJECT_SOURCE_DIR}/src/shareinpututils.cpp
-    ${PROJECT_SOURCE_DIR}/src/sharejob.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetuploader.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetrequestconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetresponseconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetuploader_utils.cpp
-)
-
 add_library(imshare_test_support STATIC ${IMSHARE_TEST_SUPPORT_SOURCES})
 target_link_libraries(imshare_test_support PUBLIC Qt6::Core Qt6::Network Qt6::Test)
 target_include_directories(imshare_test_support PUBLIC
@@ -43,6 +24,7 @@ function(imshare_add_cpp_test target)
         KF6::Purpose
         KF6::Notifications
         imshare_test_support
+        imshare_runtime
     )
     target_include_directories(${target} PRIVATE
         ${PROJECT_SOURCE_DIR}/src
@@ -50,9 +32,6 @@ function(imshare_add_cpp_test target)
     )
     target_compile_definitions(${target} PRIVATE
         QT_NO_CAST_FROM_ASCII
-        PLASMA_SHARE_UPLOADER_VERSION="${PROJECT_VERSION}"
-        PLASMA_SHARE_UPLOADER_SYSTEM_ICONS_PATH="${PROJECT_SOURCE_DIR}/icons"
-        PLASMA_SHARE_UPLOADER_SYSTEM_TARGETS_PATH="${PROJECT_SOURCE_DIR}/targets"
         IMSHARE_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     )
     add_test(NAME ${target} COMMAND ${target})
@@ -63,67 +42,26 @@ endfunction()
 
 imshare_add_cpp_test(imshare_shareinpututils_tests
     cpp/test_shareinpututils.cpp
-    ${PROJECT_SOURCE_DIR}/src/shareinpututils.cpp
 )
 
 imshare_add_cpp_test(imshare_targetuploader_utils_tests
     cpp/test_targetuploader_utils.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetuploader_utils.cpp
 )
 
 imshare_add_cpp_test(imshare_preuploadprocessor_tests
     cpp/test_preuploadprocessor.cpp
-    ${PROJECT_SOURCE_DIR}/src/preuploadprocessor.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetcoreconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetpreuploadconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetrequestconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetresponseconfigparser.cpp
 )
 
 imshare_add_cpp_test(imshare_targetuploader_tests
     cpp/test_targetuploader.cpp
-    ${PROJECT_SOURCE_DIR}/src/preuploadprocessor.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetpreuploadconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetcoreconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetrequestconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetresponseconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetuploader.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetuploader_utils.cpp
 )
 
 imshare_add_cpp_test(imshare_targetregistry_tests
     cpp/test_targetregistry.cpp
-    ${PROJECT_SOURCE_DIR}/src/constraintmatcher.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetpreuploadconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetcoreconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetrequestconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetresponseconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetconfigvalidator.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetdefinition.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetregistry.cpp
 )
 
 imshare_add_cpp_test(imshare_sharejob_tests
     cpp/test_sharejob.cpp
-    ${PROJECT_SOURCE_DIR}/src/constraintmatcher.cpp
-    ${PROJECT_SOURCE_DIR}/src/sharejob.cpp
-    ${PROJECT_SOURCE_DIR}/src/shareinpututils.cpp
-    ${PROJECT_SOURCE_DIR}/src/preuploadprocessor.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetpreuploadconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetcoreconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetrequestconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetresponseconfigparser.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetconfigvalidator.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetdefinition.cpp
-    ${PROJECT_SOURCE_DIR}/src/targeticonprovider.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetpickerdialog.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetregistry.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetuploader.cpp
-    ${PROJECT_SOURCE_DIR}/src/targetuploader_utils.cpp
 )
 
 imshare_add_cpp_test(imshare_runtimeplugin_tests cpp/test_runtimeplugin.cpp)
@@ -132,3 +70,6 @@ target_compile_definitions(imshare_runtimeplugin_tests PRIVATE
     IMSHARE_TEST_PLUGIN_PATH="$<TARGET_FILE:runtimeuploadplugin>"
 )
 add_dependencies(imshare_runtimeplugin_tests runtimeuploadplugin)
+
+imshare_add_cpp_test(imshare_targetmanager_tests cpp/test_targetmanager.cpp)
+target_link_libraries(imshare_targetmanager_tests PRIVATE imshare_manager)

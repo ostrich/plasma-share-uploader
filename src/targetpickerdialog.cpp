@@ -9,6 +9,8 @@
 #include <QMap>
 #include <QPlainTextEdit>
 #include <QPalette>
+#include <QProcess>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollArea>
@@ -109,7 +111,10 @@ TargetPickerDialog::TargetPickerDialog(const QList<TargetDefinition> &targets,
     m_iconProvider = new TargetIconProvider(this);
 
     auto *layout = new QVBoxLayout(this);
-    auto *label = new QLabel(QStringLiteral("Choose an upload target:"), this);
+    auto *label = new QLabel(targets.isEmpty()
+        ? QStringLiteral("No compatible targets. Configure targets, then reload the list.")
+        : QStringLiteral("Choose an upload target:"), this);
+    label->setWordWrap(true);
     layout->addWidget(label);
 
     auto *scrollArea = new QScrollArea(this);
@@ -136,6 +141,21 @@ TargetPickerDialog::TargetPickerDialog(const QList<TargetDefinition> &targets,
     layout->addWidget(scrollArea);
 
     auto *buttonLayout = new QHBoxLayout();
+    auto *configureButton = new QPushButton(QIcon::fromTheme(QStringLiteral("configure")), QStringLiteral("Configure..."), this);
+    configureButton->setObjectName(QStringLiteral("configureTargets"));
+    connect(configureButton, &QPushButton::clicked, this, [this]() {
+        QString executable = QStringLiteral(PLASMA_SHARE_UPLOADER_CONFIG_PATH);
+#ifdef PLASMA_SHARE_UPLOADER_DEV_CONFIG_PATH
+        executable = QStringLiteral(PLASMA_SHARE_UPLOADER_DEV_CONFIG_PATH);
+#endif
+        if (!QProcess::startDetached(executable, {}))
+            QMessageBox::warning(this, QStringLiteral("Configuration App"), QStringLiteral("Could not start %1").arg(executable));
+    });
+    buttonLayout->addWidget(configureButton);
+    auto *reloadButton = new QPushButton(QStringLiteral("Reload"), this);
+    reloadButton->setObjectName(QStringLiteral("reloadTargets"));
+    connect(reloadButton, &QPushButton::clicked, this, &TargetPickerDialog::reloadRequested);
+    buttonLayout->addWidget(reloadButton);
     if (!diagnostics.isEmpty()) {
         const int errorCount = diagnostics.size();
         QMap<QString, QStringList> diagnosticsByFile;
