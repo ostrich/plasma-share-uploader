@@ -51,7 +51,7 @@ requirement. Preserve the ability to manage target JSONs manually.
 
 The baseline below describes 0.3.0. The configuration application exposes the
 existing engine rather than
-implement a second uploader. See [the target format](../README.md#target-format)
+implementing a second uploader. See [the target format](target-format.md)
 for the authoritative user documentation.
 
 | Area | Existing support | Proposed additions |
@@ -66,6 +66,15 @@ for the authoritative user documentation.
 The current upload request has a fixed 30-second transfer timeout. Preprocessing
 rules already support `timeoutMs`, defaulting to 30 seconds. These are different
 settings and must not be presented as one timeout.
+
+The pre-1.0 format cleanup is now implemented: required `schemaVersion: 1`, a
+published JSON Schema, `accept.mimeTypes`/`accept.extensions`, normalized
+`request.body` (JSON payload in `value`), and `response.url`. The unused
+`pluginTypes` field is removed. JSON Pointer follows RFC 6901, the limited XML
+extractor is named `xml_path`, and returned URLs must be absolute HTTP(S).
+Relative URL/ID composition remains future work. These changes supersede the
+0.3.0 format details in the historical baseline above; there is no automatic
+migration framework.
 
 ## Main window and target lifecycle
 
@@ -331,7 +340,7 @@ directory design before reuse. Do not assume it can be merged unchanged.
 - [x] Add Configure and Reload actions in the Share picker, including its empty state.
 - [ ] Smoke-test installed Configure/Reload and wallet unlock/cancellation in Dolphin or Gwenview on a real Plasma desktop.
 
-The implementation uses `plasma-share-uploader-config` / **Upload Targets**.
+The implementation uses `plasma-share-uploader-config` / **Plasma Share Uploader Settings**.
 New, imported, and duplicated targets start as disabled drafts. Templates use the
 full editor until declared-input forms are implemented. Customizing a link takes
 effect on Save; single-target export materializes the definition and previews
@@ -405,7 +414,7 @@ provider's documentation or service block unrelated local configuration work.
 
 | Decision | Current leaning / question |
 | --- | --- |
-| App identity and integration | Resolved for Phase 1: standalone `plasma-share-uploader-config`, display name Upload Targets, desktop launcher and picker action. A System Settings module remains optional later. |
+| App identity and integration | Resolved for Phase 1: standalone `plasma-share-uploader-config`, display name Plasma Share Uploader Settings, desktop launcher and picker action. A System Settings module remains optional later. |
 | Editing transaction | Resolved: explicit Save; Save/Discard/Cancel on navigation; enable/disable acts immediately after resolving the draft. |
 | Credential contract | Resolved: `${WALLET:name}`, network wallet / `plasma-share-uploader` folder, shared names, explicit access errors with no plaintext fallback. |
 | Template inputs | Define typed input declarations and how saved values materialize a complete definition without field merging. |

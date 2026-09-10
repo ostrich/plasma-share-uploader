@@ -7,8 +7,7 @@
 #include <QNetworkRequest>
 #include <QtTest>
 
-class TargetUploaderUtilsTest final : public QObject
-{
+class TargetUploaderUtilsTest final : public QObject {
     Q_OBJECT
 
 private slots:
@@ -17,6 +16,7 @@ private slots:
     void applyHeadersAndQueryParametersSubstituteValues();
     void substituteJsonValueWalksNestedObjects();
     void resolveJsonPointerHandlesObjectsArraysAndEscapes();
+    void jsonPointerDistinguishesRootEmptyKeysAndArrayIndices();
     void resolveXmlPathHandlesSimpleXPath();
     void encodesLiteralQueryAndFormValues();
     void environmentExpansionDoesNotRecurse();
@@ -24,15 +24,14 @@ private slots:
 
 void TargetUploaderUtilsTest::objectAndFieldHelpersReturnExpectedValues()
 {
-    const QJsonObject fields{{QStringLiteral("token"), QStringLiteral("abc")}};
-    const QJsonObject parent{
-        {QStringLiteral("child"), QJsonObject{{QStringLiteral("name"), QStringLiteral("demo")}}},
-        {QStringLiteral("fields"), fields},
-        {QStringLiteral("plain"), QStringLiteral("value")}};
+    const QJsonObject fields { { QStringLiteral("token"), QStringLiteral("abc") } };
+    const QJsonObject parent { { QStringLiteral("child"),
+                                   QJsonObject { { QStringLiteral("name"), QStringLiteral("demo") } } },
+        { QStringLiteral("fields"), fields }, { QStringLiteral("plain"), QStringLiteral("value") } };
 
     QCOMPARE(TargetUploaderUtils::stringValue(parent, "plain"), QStringLiteral("value"));
     QCOMPARE(TargetUploaderUtils::objectValue(parent, "child").value(QStringLiteral("name")).toString(),
-             QStringLiteral("demo"));
+        QStringLiteral("demo"));
     QCOMPARE(TargetUploaderUtils::fieldMap(parent), fields);
 }
 
@@ -42,27 +41,28 @@ void TargetUploaderUtilsTest::substituteHelpersApplyEnvAndFilenameTemplates()
     const QFileInfo fileInfo(QStringLiteral("/tmp/My File.png"));
 
     QCOMPARE(TargetUploaderUtils::substituteEnv(QStringLiteral("Bearer ${ENV:IMSHARE_TEST_TOKEN}")),
-             QStringLiteral("Bearer secret"));
-    QCOMPARE(TargetUploaderUtils::substituteRequestValue(
-                 QStringLiteral("${FILENAME}:${ENV:IMSHARE_TEST_TOKEN}"), fileInfo),
-             QStringLiteral("My File.png:secret"));
+        QStringLiteral("Bearer secret"));
+    QCOMPARE(
+        TargetUploaderUtils::substituteRequestValue(QStringLiteral("${FILENAME}:${ENV:IMSHARE_TEST_TOKEN}"), fileInfo),
+        QStringLiteral("My File.png:secret"));
     QCOMPARE(TargetUploaderUtils::applyUrlTemplate(
                  QStringLiteral("https://example.test/${FILENAME}?token=${ENV:IMSHARE_TEST_TOKEN}"), fileInfo),
-             QStringLiteral("https://example.test/My%20File.png?token=secret"));
+        QStringLiteral("https://example.test/My%20File.png?token=secret"));
 }
 
 void TargetUploaderUtilsTest::applyHeadersAndQueryParametersSubstituteValues()
 {
     qputenv("IMSHARE_TEST_HEADER", "value123");
     const QFileInfo fileInfo(QStringLiteral("/tmp/My File.txt"));
-    const QJsonObject requestConfig{
-        {QStringLiteral("query"),
-         QJsonObject{{QStringLiteral("name"), QStringLiteral("${FILENAME}")},
-                     {QStringLiteral("token"), QStringLiteral("${ENV:IMSHARE_TEST_HEADER}")}}},
-        {QStringLiteral("headers"),
-         QJsonObject{{QStringLiteral("Authorization"), QStringLiteral("Bearer ${ENV:IMSHARE_TEST_HEADER}")},
-                     {QStringLiteral("X-File"), QStringLiteral("${FILENAME}")},
-                     {QStringLiteral("X-Test"), QStringLiteral("plain")}}}};
+    const QJsonObject requestConfig {
+        { QStringLiteral("query"),
+            QJsonObject { { QStringLiteral("name"), QStringLiteral("${FILENAME}") },
+                { QStringLiteral("token"), QStringLiteral("${ENV:IMSHARE_TEST_HEADER}") } } },
+        { QStringLiteral("headers"),
+            QJsonObject { { QStringLiteral("Authorization"), QStringLiteral("Bearer ${ENV:IMSHARE_TEST_HEADER}") },
+                { QStringLiteral("X-File"), QStringLiteral("${FILENAME}") },
+                { QStringLiteral("X-Test"), QStringLiteral("plain") } } }
+    };
 
     QNetworkRequest request;
     TargetUploaderUtils::applyHeaders(requestConfig, fileInfo, request);
@@ -71,19 +71,18 @@ void TargetUploaderUtilsTest::applyHeadersAndQueryParametersSubstituteValues()
     QCOMPARE(request.rawHeader("X-File"), QByteArray("My File.txt"));
     QCOMPARE(request.rawHeader("X-Test"), QByteArray("plain"));
 
-    const QUrl url = TargetUploaderUtils::applyQueryParameters(QStringLiteral("https://example.test/upload"),
-                                                               requestConfig,
-                                                               fileInfo);
+    const QUrl url = TargetUploaderUtils::applyQueryParameters(
+        QStringLiteral("https://example.test/upload"), requestConfig, fileInfo);
     QCOMPARE(url.query(), QStringLiteral("name=My File.txt&token=value123"));
 }
 
 void TargetUploaderUtilsTest::substituteJsonValueWalksNestedObjects()
 {
     const QFileInfo fileInfo(QStringLiteral("/tmp/My File.txt"));
-    const QJsonObject input{
-        {QStringLiteral("name"), QStringLiteral("${FILENAME}")},
-        {QStringLiteral("nested"),
-         QJsonArray{QStringLiteral("a"), QJsonObject{{QStringLiteral("path"), QStringLiteral("${FILENAME}")}}}}};
+    const QJsonObject input { { QStringLiteral("name"), QStringLiteral("${FILENAME}") },
+        { QStringLiteral("nested"),
+            QJsonArray {
+                QStringLiteral("a"), QJsonObject { { QStringLiteral("path"), QStringLiteral("${FILENAME}") } } } } };
 
     const QJsonValue output = TargetUploaderUtils::substituteJsonValue(input, fileInfo);
     QVERIFY(output.isObject());
@@ -96,25 +95,24 @@ void TargetUploaderUtilsTest::substituteJsonValueWalksNestedObjects()
                  .toObject()
                  .value(QStringLiteral("path"))
                  .toString(),
-             QStringLiteral("My File.txt"));
+        QStringLiteral("My File.txt"));
 }
 
 void TargetUploaderUtilsTest::resolveJsonPointerHandlesObjectsArraysAndEscapes()
 {
-    const QJsonObject root{
-        {QStringLiteral("data"),
-         QJsonArray{
-             QJsonObject{{QStringLiteral("url"), QStringLiteral("https://example.test/1")}},
-             QJsonObject{{QStringLiteral("a/b"), QStringLiteral("slash")},
-                         {QStringLiteral("m~n"), QStringLiteral("tilde")}},
-         }}};
+    const QJsonObject root { { QStringLiteral("data"),
+        QJsonArray {
+            QJsonObject { { QStringLiteral("url"), QStringLiteral("https://example.test/1") } },
+            QJsonObject { { QStringLiteral("a/b"), QStringLiteral("slash") },
+                { QStringLiteral("m~n"), QStringLiteral("tilde") } },
+        } } };
 
     QCOMPARE(TargetUploaderUtils::resolveJsonPointer(QJsonValue(root), QStringLiteral("/data/0/url")).toString(),
-             QStringLiteral("https://example.test/1"));
+        QStringLiteral("https://example.test/1"));
     QCOMPARE(TargetUploaderUtils::resolveJsonPointer(QJsonValue(root), QStringLiteral("/data/1/a~1b")).toString(),
-             QStringLiteral("slash"));
+        QStringLiteral("slash"));
     QCOMPARE(TargetUploaderUtils::resolveJsonPointer(QJsonValue(root), QStringLiteral("/data/1/m~0n")).toString(),
-             QStringLiteral("tilde"));
+        QStringLiteral("tilde"));
     QVERIFY(TargetUploaderUtils::resolveJsonPointer(QJsonValue(root), QStringLiteral("/data/5")).isNull());
 }
 
@@ -131,15 +129,47 @@ void TargetUploaderUtilsTest::resolveXmlPathHandlesSimpleXPath()
 </files>)";
 
     QCOMPARE(TargetUploaderUtils::resolveXmlPath(xml, QStringLiteral("/files/file[2]/url")),
-             QStringLiteral("https://example.test/two"));
+        QStringLiteral("https://example.test/two"));
     QVERIFY(TargetUploaderUtils::resolveXmlPath(xml, QStringLiteral("/files/missing/url")).isEmpty());
+    QCOMPARE(TargetUploaderUtils::resolveXmlPath(
+                 "<root>https://<host>example.test</host>/file</root>", QStringLiteral("/root")),
+        QStringLiteral("https://example.test/file"));
+    for (const auto& path : { QStringLiteral("//url"), QStringLiteral("/files/*"), QStringLiteral("/files/file[0]"),
+             QStringLiteral("/files/file/@url"), QStringLiteral("/files/file/url/text()") }) {
+        QVERIFY(!TargetUploaderUtils::isValidXmlPath(path));
+        QVERIFY(TargetUploaderUtils::resolveXmlPath(xml, path).isEmpty());
+    }
+}
+
+void TargetUploaderUtilsTest::jsonPointerDistinguishesRootEmptyKeysAndArrayIndices()
+{
+    const auto root = QJsonDocument::fromJson(
+        R"({"":"empty-key","~1":"literal-tilde-one","array":["zero","one"],"object":{"01":"key"}})")
+                          .object();
+    QCOMPARE(TargetUploaderUtils::resolveJsonPointer(root, QString()), QJsonValue(root));
+    QCOMPARE(
+        TargetUploaderUtils::resolveJsonPointer(root, QStringLiteral("/")).toString(), QStringLiteral("empty-key"));
+    QCOMPARE(TargetUploaderUtils::resolveJsonPointer(root, QStringLiteral("/~01")).toString(),
+        QStringLiteral("literal-tilde-one"));
+    QCOMPARE(
+        TargetUploaderUtils::resolveJsonPointer(root, QStringLiteral("/array/1")).toString(), QStringLiteral("one"));
+    QCOMPARE(
+        TargetUploaderUtils::resolveJsonPointer(root, QStringLiteral("/object/01")).toString(), QStringLiteral("key"));
+    for (const auto& index : { QStringLiteral("01"), QStringLiteral("+1"), QStringLiteral("-1"), QStringLiteral(" 1"),
+             QStringLiteral("-"), QStringLiteral("18446744073709551616") })
+        QVERIFY(TargetUploaderUtils::resolveJsonPointer(root, QStringLiteral("/array/") + index).isNull());
+    for (const auto& pointer :
+        { QStringLiteral("array"), QStringLiteral("/~"), QStringLiteral("/~2"), QStringLiteral("#/") }) {
+        QVERIFY(!TargetUploaderUtils::isValidJsonPointer(pointer));
+        QVERIFY(TargetUploaderUtils::resolveJsonPointer(root, pointer).isNull());
+    }
 }
 
 void TargetUploaderUtilsTest::encodesLiteralQueryAndFormValues()
 {
     const QFileInfo fileInfo(QStringLiteral("/tmp/a+b%20c.txt"));
-    const QMap<QString, QString> fields{{QStringLiteral("key+%"), QStringLiteral("a+b%20c & café")},
-                                       {QStringLiteral("name"), QStringLiteral("${FILENAME}")}};
+    const QMap<QString, QString> fields { { QStringLiteral("key+%"), QStringLiteral("a+b%20c & café") },
+        { QStringLiteral("name"), QStringLiteral("${FILENAME}") } };
     const QByteArray expected("key%2B%25=a%2Bb%2520c%20%26%20caf%C3%A9&name=a%2Bb%2520c.txt");
     QCOMPARE(TargetUploaderUtils::createFormUrlencodedBody(fields, fileInfo), expected);
     const QString endpoint = QStringLiteral("https://example.test/upload?existing=x%2By");
@@ -149,16 +179,18 @@ void TargetUploaderUtilsTest::encodesLiteralQueryAndFormValues()
     for (auto it = fields.begin(); it != fields.end(); ++it) {
         jsonFields.insert(it.key(), it.value());
     }
-    QCOMPARE(TargetUploaderUtils::applyQueryParameters(endpoint,
-        QJsonObject{{QStringLiteral("query"), jsonFields}}, fileInfo), url);
+    QCOMPARE(TargetUploaderUtils::applyQueryParameters(
+                 endpoint, QJsonObject { { QStringLiteral("query"), jsonFields } }, fileInfo),
+        url);
 }
 
 void TargetUploaderUtilsTest::environmentExpansionDoesNotRecurse()
 {
     qputenv("IMSHARE_TEST_CYCLE", "${ENV:IMSHARE_TEST_CYCLE}");
     qputenv("IMSHARE_TEST_INDIRECT", "${ENV:IMSHARE_TEST_CYCLE}");
-    QCOMPARE(TargetUploaderUtils::substituteEnv(QStringLiteral("x${ENV:IMSHARE_TEST_CYCLE}/${ENV:IMSHARE_TEST_INDIRECT}y")),
-             QStringLiteral("x${ENV:IMSHARE_TEST_CYCLE}/${ENV:IMSHARE_TEST_CYCLE}y"));
+    QCOMPARE(
+        TargetUploaderUtils::substituteEnv(QStringLiteral("x${ENV:IMSHARE_TEST_CYCLE}/${ENV:IMSHARE_TEST_INDIRECT}y")),
+        QStringLiteral("x${ENV:IMSHARE_TEST_CYCLE}/${ENV:IMSHARE_TEST_CYCLE}y"));
     qunsetenv("IMSHARE_TEST_CYCLE");
     qunsetenv("IMSHARE_TEST_INDIRECT");
 }

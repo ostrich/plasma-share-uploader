@@ -1,0 +1,2325 @@
+[
+  {
+    "name": "minimal",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "version-None",
+    "target": {
+      "schemaVersion": null,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "version-True",
+    "target": {
+      "schemaVersion": true,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "version-'1'",
+    "target": {
+      "schemaVersion": "1",
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "version-0",
+    "target": {
+      "schemaVersion": 0,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "version-2",
+    "target": {
+      "schemaVersion": 2,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "version-1.5",
+    "target": {
+      "schemaVersion": 1.5,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-version",
+    "target": {
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-id",
+    "target": {
+      "schemaVersion": 1,
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-request",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-response",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "displayName-empty",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "displayName": ""
+    },
+    "valid": true
+  },
+  {
+    "name": "displayName-null",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "displayName": null
+    },
+    "valid": false
+  },
+  {
+    "name": "description-empty",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "description": ""
+    },
+    "valid": true
+  },
+  {
+    "name": "description-null",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "description": null
+    },
+    "valid": false
+  },
+  {
+    "name": "icon-empty",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "icon": ""
+    },
+    "valid": true
+  },
+  {
+    "name": "icon-null",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "icon": null
+    },
+    "valid": false
+  },
+  {
+    "name": "removed-pluginTypes",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "pluginTypes": []
+    },
+    "valid": false
+  },
+  {
+    "name": "removed-constraints",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "constraints": []
+    },
+    "valid": false
+  },
+  {
+    "name": "removed-extensions",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "extensions": []
+    },
+    "valid": false
+  },
+  {
+    "name": "unknown-fields-retained",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "customMetadata": {
+        "future": true
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "accept-alternatives",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "accept": {
+        "mimeTypes": [
+          "image/png",
+          "image/jpeg"
+        ],
+        "extensions": [
+          ".png",
+          "jpg"
+        ]
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "accept-empty",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "accept": {
+        "mimeTypes": [],
+        "extensions": []
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "accept-null",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "accept": null
+    },
+    "valid": false
+  },
+  {
+    "name": "mime-True",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "accept": {
+        "mimeTypes": true
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "mime-None",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "accept": {
+        "mimeTypes": null
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "mime-'image/png'",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "accept": {
+        "mimeTypes": "image/png"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "mime-['image/png', '*/png']",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "accept": {
+        "mimeTypes": [
+          "image/png",
+          "*/png"
+        ]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "mime-['image/te*xt']",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "accept": {
+        "mimeTypes": [
+          "image/te*xt"
+        ]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "mime-['image/png\\n']",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "accept": {
+        "mimeTypes": [
+          "image/png\n"
+        ]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "mime-['image/png', 3]",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "accept": {
+        "mimeTypes": [
+          "image/png",
+          3
+        ]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "extension-['.']",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "accept": {
+        "extensions": [
+          "."
+        ]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "extension-['tar.gz']",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "accept": {
+        "extensions": [
+          "tar.gz"
+        ]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "extension-['bad/ext']",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "accept": {
+        "extensions": [
+          "bad/ext"
+        ]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "extension-['bad\\\\ext']",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "accept": {
+        "extensions": [
+          "bad\\ext"
+        ]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "extension-['bad ext']",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "accept": {
+        "extensions": [
+          "bad ext"
+        ]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "extension-['png\\n']",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "accept": {
+        "extensions": [
+          "png\n"
+        ]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "extension-['*']",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "accept": {
+        "extensions": [
+          "*"
+        ]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "body-number",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": 42
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "body-type-number",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": 42
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "body-type-absent",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {}
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "old-request-type",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        },
+        "type": "raw"
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "lowercase-method",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "post",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "multipart",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "multipart",
+          "fileField": "files[]",
+          "fields": {}
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "multipart-missing-file",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "multipart"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "multipart-put",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "PUT",
+        "body": {
+          "type": "multipart",
+          "fileField": "file"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "form-empty",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "form_urlencoded",
+          "fields": {}
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "form-missing",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "form_urlencoded"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "json-None",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "json",
+          "value": null
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "json-True",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "json",
+          "value": true
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "json-42",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "json",
+          "value": 42
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "json-'${FILENAME}'",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "json",
+          "value": "${FILENAME}"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "json-[]",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "json",
+          "value": []
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "json-{}",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "json",
+          "value": {}
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "json-missing",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "json"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "bad-inactive-contentType",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw",
+          "contentType": 42
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "headers-null",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        },
+        "headers": null
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "headers-numeric",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        },
+        "headers": {
+          "X-Test": 1
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "query-empty-name",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        },
+        "query": {
+          "": "test"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "old-response",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "type": "text_url"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "response-null",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": null
+    },
+    "valid": false
+  },
+  {
+    "name": "optional-extractor-null",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        },
+        "thumbnail": null
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "pointer-''",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "json_pointer",
+          "pointer": ""
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "pointer-'/'",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "json_pointer",
+          "pointer": "/"
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "pointer-'/files/0/url'",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "json_pointer",
+          "pointer": "/files/0/url"
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "pointer-'/a~1b/~0'",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "json_pointer",
+          "pointer": "/a~1b/~0"
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "pointer-'/line\\nbreak'",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "json_pointer",
+          "pointer": "/line\nbreak"
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "bad-pointer-'url'",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "json_pointer",
+          "pointer": "url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "bad-pointer-'/~'",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "json_pointer",
+          "pointer": "/~"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "bad-pointer-'/~2'",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "json_pointer",
+          "pointer": "/~2"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "bad-pointer-'/foo~9bar'",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "json_pointer",
+          "pointer": "/foo~9bar"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "bad-pointer-42",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "json_pointer",
+          "pointer": 42
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "bad-pointer-None",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "json_pointer",
+          "pointer": null
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "pointer-absent",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "json_pointer"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "xml-path",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "xml_path",
+          "path": "/files/file[2]/url"
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "bad-xml-'/files//url'",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "xml_path",
+          "path": "/files//url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "bad-xml-'/files/*/url'",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "xml_path",
+          "path": "/files/*/url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "bad-xml-'/files/@url'",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "xml_path",
+          "path": "/files/@url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "bad-xml-'/files/file[0]/url'",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "xml_path",
+          "path": "/files/file[0]/url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "bad-xml-'/files/url/text()'",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "xml_path",
+          "path": "/files/url/text()"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "bad-xml-'/files/url\\n'",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "xml_path",
+          "path": "/files/url\n"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "old-xml",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "xml_xpath",
+          "xpath": "/files/url"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "bad-regex",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "regex",
+          "pattern": "("
+        }
+      }
+    },
+    "valid": false,
+    "schemaValid": true
+  },
+  {
+    "name": "missing-regex-group",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "regex",
+          "pattern": "https://.*",
+          "group": 1
+        }
+      }
+    },
+    "valid": false,
+    "schemaValid": true
+  },
+  {
+    "name": "regex-whole-match",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "regex",
+          "pattern": "https://.*",
+          "group": 0
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "fractional-regex-group",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "regex",
+          "pattern": "(.*)",
+          "group": 0.5
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "preupload",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "preUpload": [
+        {
+          "mime": [
+            "image/png"
+          ],
+          "fileHandling": "inplace_copy",
+          "commands": [
+            {
+              "argv": [
+                "tool",
+                "${FILE}"
+              ]
+            }
+          ],
+          "timeoutMs": 30000
+        }
+      ]
+    },
+    "valid": true
+  },
+  {
+    "name": "timeout-0",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "preUpload": [
+        {
+          "mime": [
+            "image/png"
+          ],
+          "fileHandling": "inplace_copy",
+          "commands": [
+            {
+              "argv": [
+                "tool",
+                "${FILE}"
+              ]
+            }
+          ],
+          "timeoutMs": 0
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "timeout-1.5",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "preUpload": [
+        {
+          "mime": [
+            "image/png"
+          ],
+          "fileHandling": "inplace_copy",
+          "commands": [
+            {
+              "argv": [
+                "tool",
+                "${FILE}"
+              ]
+            }
+          ],
+          "timeoutMs": 1.5
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "timeout-2147483648",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "preUpload": [
+        {
+          "mime": [
+            "image/png"
+          ],
+          "fileHandling": "inplace_copy",
+          "commands": [
+            {
+              "argv": [
+                "tool",
+                "${FILE}"
+              ]
+            }
+          ],
+          "timeoutMs": 2147483648
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "timeout-'30000'",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "preUpload": [
+        {
+          "mime": [
+            "image/png"
+          ],
+          "fileHandling": "inplace_copy",
+          "commands": [
+            {
+              "argv": [
+                "tool",
+                "${FILE}"
+              ]
+            }
+          ],
+          "timeoutMs": "30000"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "preupload-bad-mime",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "preUpload": [
+        {
+          "mime": [
+            "im*age/png"
+          ],
+          "fileHandling": "inplace_copy",
+          "commands": [
+            {
+              "argv": [
+                "tool",
+                "${FILE}"
+              ]
+            }
+          ],
+          "timeoutMs": 30000
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "preupload-missing-file",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "preUpload": [
+        {
+          "mime": [
+            "image/png"
+          ],
+          "fileHandling": "inplace_copy",
+          "commands": [
+            {
+              "argv": [
+                "tool"
+              ]
+            }
+          ],
+          "timeoutMs": 30000
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "preupload-missing-output",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "preUpload": [
+        {
+          "mime": [
+            "image/png"
+          ],
+          "fileHandling": "output_file",
+          "commands": [
+            {
+              "argv": [
+                "tool",
+                "${FILE}"
+              ]
+            }
+          ],
+          "timeoutMs": 30000
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "preupload-output",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      },
+      "preUpload": [
+        {
+          "mime": [
+            "image/png"
+          ],
+          "fileHandling": "output_file",
+          "commands": [
+            {
+              "argv": [
+                "tool",
+                "${FILE}",
+                "${OUT_FILE}"
+              ]
+            }
+          ],
+          "timeoutMs": 30000
+        }
+      ]
+    },
+    "valid": true
+  },
+  {
+    "name": "inactive-extractor-pointer",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url",
+          "pointer": "not/a/pointer"
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "inactive-extractor-path",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url",
+          "path": "//unsupported"
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "inactive-extractor-pattern",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url",
+          "pattern": "("
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "unknown-request-metadata",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        },
+        "metadata": "${WALLET:bad key}"
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "inactive-body-value",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw",
+          "value": "${WALLET:bad key}"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "wallet-bad-key",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        },
+        "headers": {
+          "Authorization": "${WALLET:bad key}"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false,
+    "schemaValid": true
+  },
+  {
+    "name": "wallet-key-newline",
+    "target": {
+      "schemaVersion": 1,
+      "id": "example",
+      "request": {
+        "url": "https://example.invalid/upload",
+        "method": "POST",
+        "body": {
+          "type": "raw"
+        },
+        "headers": {
+          "Authorization": "${WALLET:key\n}"
+        }
+      },
+      "response": {
+        "url": {
+          "type": "text_url"
+        }
+      }
+    },
+    "valid": false,
+    "schemaValid": true
+  }
+]

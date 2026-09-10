@@ -1,14 +1,14 @@
 {
+  "schemaVersion": 1,
   "id": "catbox",
   "displayName": "Catbox",
   "description": "Upload images to Catbox",
   "icon": "image-x-generic",
-  "pluginTypes": ["ShareUrl", "Export"],
-  "constraints": ["mimeType:image/*"],
   "request": {
     "url": "https://catbox.moe/user/api.php",
     "method": "POST",
-    "multipart": {
+    "body": {
+      "type": "multipart",
       "fields": {
         "reqtype": "fileupload"
       },
@@ -17,16 +17,30 @@
   },
   "preUpload": [
     {
-      "mime": ["image/jpeg", "image/tiff"],
+      "mime": [
+        "image/jpeg",
+        "image/tiff"
+      ],
       "fileHandling": "inplace_copy",
       "commands": [
         {
-          "argv": ["exiv2", "rm", "${FILE}"]
+          "argv": [
+            "exiv2",
+            "rm",
+            "${FILE}"
+          ]
         }
       ]
     }
   ],
   "response": {
-    "type": "text_url"
+    "url": {
+      "type": "text_url"
+    }
+  },
+  "accept": {
+    "mimeTypes": [
+      "image/*"
+    ]
   }
 }

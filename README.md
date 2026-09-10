@@ -10,7 +10,10 @@ GPL-3.0-or-later.
 
 ## Build
 
-Requires Qt 6, KF6 Purpose, CoreAddons, Notifications, Wallet, CMake, and Extra CMake Modules.
+Requires Qt 6.8 or newer (including Qt Declarative/Quick Controls), KF6 Purpose,
+CoreAddons, Notifications, Wallet, Kirigami, KDE's QQC2 desktop style, CMake,
+and Extra CMake Modules. On Arch, the additional UI packages are
+`qt6-declarative`, `kirigami`, and `qqc2-desktop-style`.
 
 ```sh
 cmake -S . -B build
@@ -19,14 +22,27 @@ cmake --build build
 
 ## Test
 
+Tests additionally require Python 3 and `jsonschema`. An isolated environment
+keeps these development dependencies out of the system installation:
+
 ```sh
-cmake -S . -B build -DBUILD_TESTING=ON
+python3 -m venv /tmp/plasma-share-test-venv
+/tmp/plasma-share-test-venv/bin/pip install -r tests/requirements.txt
+cmake -S . -B build -DBUILD_TESTING=ON -DPython3_EXECUTABLE=/tmp/plasma-share-test-venv/bin/python
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-The test suite includes C++ unit and integration tests that use a local in-process HTTP
-server, plus a Purpose controller test requiring Qt QML. It does not contact external upload services.
+The test suite compares the JSON Schema and C++ validator against bundled targets
+and a shared valid/invalid fixture corpus. It also includes C++ unit and integration tests that use a local in-process HTTP
+server, Qt Quick tests exercising the configuration controls, and tests loading
+the built plugin through Purpose's real controller. It does not contact external
+upload services or require a real wallet. CTest uses the offscreen platform.
+
+Run QML type and binding checks with `cmake --build build --target imshare_ui_qmllint`.
+See the [QML migration validation](docs/qml-migration-validation.md) for coverage
+and desktop verification details, and [format validation](docs/target-format-validation.md)
+for the schema and parser coverage.
 
 ## Install
 
@@ -37,8 +53,12 @@ cmake --install build
 The plugin installs to Qt's system plugin search path under `kf6/purpose`, using
 [`KDEInstallDirs6`](https://api.kde.org/ecm/kde-module/KDEInstallDirs6.html). Installation there usually requires administrator privileges.
 Bundled targets install under `${CMAKE_INSTALL_PREFIX}/share/plasma-share-uploader/targets/`.
-The `plasma-share-uploader-config` executable and **Upload Targets** desktop launcher
+The `plasma-share-uploader-config` executable and **Plasma Share Uploader Settings** desktop launcher
 are installed alongside the plugin.
+Both interfaces use embedded QML resources; no QML files from the checkout are
+needed at runtime. The standalone manager defaults to KDE's desktop control style
+and respects Qt's `-style`, `QT_QUICK_CONTROLS_STYLE`, and
+`QT_QUICK_CONTROLS_CONF` overrides. The picker inherits its host's style.
 The default prefix follows KDE's installation (normally `/usr`, also used by the
 Arch package); set `CMAKE_INSTALL_PREFIX` at configure time to override it.
 For a custom plugin location, set `KDE_INSTALL_QTPLUGINDIR` at configure time and
@@ -97,7 +117,7 @@ For updating an existing installation, see [the release notes](CHANGELOG.md).
 
 ## Configuration app
 
-Open **Upload Targets** from the application menu, run `plasma-share-uploader-config`,
+Open **Plasma Share Uploader Settings** from the application menu, run `plasma-share-uploader-config`,
 or choose **Configure...** in the Share picker. Manage presets and custom targets,
 edit every supported target field or the complete JSON, store credentials in
 KWallet, and import/export our JSON format. Changes use explicit Save; new targets
@@ -110,173 +130,33 @@ the [configuration application plan](docs/configuration-app-plan.md) for later w
 
 ## Target format
 
-
-Each target file is a single JSON object with these required fields:
-- `id`: unique lowercase identifier; `[a-z0-9][a-z0-9_-]*`.
-- `displayName`: human-friendly name shown in the picker.
-- `description`: short description shown under the target name.
-- `icon`: icon name (e.g. `image-x-generic`).
-- `request`: upload configuration (see below).
-- `response`: how to extract the URL from the server response.
-
-Optional fields:
-- `pluginTypes`: accepted for compatibility, but not used by the runtime picker.
-- `constraints`: target filters such as `["mimeType:image/*"]`. These are evaluated at runtime against the files being shared.
-- `extensions`: optional list of file suffixes such as `["png", ".jpg"]`. If present, every shared file must match one of them.
-- `preUpload`: ordered list of per-file preprocessing rules to run before upload.
-
-### Request formats
-
-`request` includes:
-- `url`: upload endpoint URL. Supports environment/wallet substitution, and `${FILENAME}` in URL paths.
-- `method`: HTTP method. `multipart`, `raw`, `form_urlencoded`, and `json` currently support `POST` and `PUT` as documented below.
-- `query`: optional query-string parameter map.
-- `headers`: optional header map.
-- `type` (optional): `multipart` (default), `raw`, `form_urlencoded`, or `json`.
-
-Request string placeholders:
-- `${ENV:VARNAME}`: expand from the environment. Missing/empty values stop uploads from the manager or Share plugin.
-- `${WALLET:name}`: resolve a managed KWallet credential; names accept letters, digits, dots, dashes, and underscores. See [credentials](docs/configuration-app.md#credentials).
-- `${FILENAME}`: expand to the local file name.
-
-All substitutions run once; placeholder-looking text inside expanded values stays
-literal. These tokens apply to endpoint, header/query values, multipart/form field
-values, and JSON string values. They do not apply to field names, raw content type,
-raw file contents, or preprocessing commands.
-
-Multipart uploads:
-- `request.type`: `multipart` (or omitted).
-- `request.multipart.fileField`: form field name for the file.
-- `request.multipart.fields`: optional extra form fields (string values only).
-  Field values support the request string placeholders above.
-
-Raw uploads:
-- `request.type`: `raw`.
-- `request.contentType`: optional Content-Type to set for the file body.
-
-Form URL encoded uploads:
-- `request.type`: `form_urlencoded`.
-- `request.formUrlencoded.fields`: required string map sent as `application/x-www-form-urlencoded`.
-  Field values support the request string placeholders above.
-
-JSON uploads:
-- `request.type`: `json`.
-- `request.json.fields`: required JSON value written as `application/json`.
-  String values inside the JSON body support the request string placeholders above.
-
-Headers and query parameters:
-- `request.headers`: string map. Values support the request string placeholders above.
-- `request.query`: string map. Values support the request string placeholders above.
-
-### Pre-upload commands
-
-Targets may optionally define `preUpload` rules to transform a file before it is uploaded.
-Rules are evaluated once per file, in order. The first matching rule is used. If no
-rule matches, the original file is uploaded unchanged.
-
-Each `preUpload` entry must include:
-- `mime`: non-empty array of MIME patterns. Supported forms are exact MIME types such as `image/png`, wildcard subtype patterns such as `image/*`, and `*/*` to match any MIME type.
-- `fileHandling`: one of:
-  - `inplace_copy`: copy the original file to a temporary path, substitute `${FILE}` with that temporary path, run one or more commands in place on the copy, then upload the modified copy.
-  - `output_file`: substitute `${FILE}` with the original file path and `${OUT_FILE}` with a temporary output path, run exactly one command, then upload `${OUT_FILE}`.
-- `commands`: non-empty array of command objects.
-  - `inplace_copy` rules may contain one or more commands.
-  - `output_file` rules must contain exactly one command.
-- `timeoutMs` (optional): timeout for each command, in milliseconds; defaults to 30000.
-
-Each command object must include:
-- `argv`: non-empty array of command arguments. Commands are executed directly without a shell.
-
-Available placeholders in `argv`:
-- `${FILE}`: required in every command.
-- `${OUT_FILE}`: required for `output_file`, and not allowed for `inplace_copy`.
-
-Behavior:
-- First matching `preUpload` rule wins.
-- No match: upload the original file.
-- Non-zero exit, timeout, or missing output file: fail that upload and surface stderr.
-- Original user files are never modified.
-- Commands run asynchronously so the host application's UI remains responsive.
-
-If you want a catch-all fallback rule, use `*/*` and place it last.
-
-### Response formats
-
-`response` must include a `type`:
-- `text_url`: response body is the URL.
-- `regex`: use a valid `pattern` and optional `group` (default `1`, or `0` for the whole match) to extract URL from response text. The group must exist in the pattern.
-- `json_pointer`: use `pointer` (must start with `/`) to locate a string URL in a JSON response.
-- `header`: use `name` to read a response header.
-- `redirect_url`: use the redirect target URL, or the final reply URL if no redirect target is reported.
-- `xml_xpath`: use `xpath` (must start with `/`) to locate a text node in an XML response.
-
-Optional error extraction:
-- `response.error`: optional extractor object with the same `type` choices as `response`.
-- On HTTP error responses, the uploader will try `response.error` before falling back to the raw server response text.
-
-Optional variant outputs:
-- `response.thumbnail`: optional extractor object for a thumbnail URL.
-- `response.deletion`: optional extractor object for a deletion URL.
-
-`ShareJob` output now includes:
-- `url` / `urls`
-- `thumbnailUrl` / `thumbnailUrls` when configured
-- `deletionUrl` / `deletionUrls` when configured
-- `results`: per-upload objects containing `url`, optional `thumbnailUrl`, optional `deletionUrl`, and `response`
-
-Each `response` object contains:
-- `statusCode`
-- `reasonPhrase`
-- `responseUrl`
-- `headers` with lowercased header names
-- `responseText`
-
-If a later file fails, the job reports the failure while preserving completed
-uploads in its output and copying their URLs to the clipboard.
-
-### Example target file
+Targets use **schemaVersion 1**, shared by the manager and Share plugin. The
+[complete format reference](docs/target-format.md) covers required fields,
+acceptance rules, request bodies, credentials, extractors, and preprocessing.
+A [JSON Schema](schemas/target-v1.schema.json) is provided for editor validation.
 
 ```json
 {
+  "schemaVersion": 1,
   "id": "example",
   "displayName": "ExampleHost",
-  "description": "Upload images to ExampleHost",
-  "icon": "image-x-generic",
-  "pluginTypes": ["ShareUrl", "Export"],
-  "constraints": ["mimeType:image/*"],
+  "accept": {"mimeTypes": ["image/png", "image/jpeg"]},
   "request": {
     "url": "https://example.com/upload",
     "method": "POST",
-    "multipart": {
-      "fields": {
-        "token": "${ENV:EXAMPLE_TOKEN}"
-      },
-      "fileField": "file"
-    }
+    "body": {"type": "multipart", "fileField": "file"}
   },
-  "preUpload": [
-    {
-      "mime": ["image/jpeg", "image/tiff"],
-      "fileHandling": "inplace_copy",
-      "commands": [
-        {
-          "argv": ["exiv2", "rm", "${FILE}"]
-        },
-        {
-          "argv": ["oxipng", "--strip", "all", "${FILE}"]
-        }
-      ]
-    }
-  ],
   "response": {
-    "type": "json_pointer",
-    "pointer": "/data/url"
+    "url": {"type": "json_pointer", "pointer": "/data/url"}
   }
 }
 ```
 
-Save it as its own file, for example
-`~/.config/plasma-share-uploader/targets/example.json`.
+MIME entries are alternatives; MIME and extension filters must both match when
+both are supplied. The shared URL and any nonempty thumbnail/deletion URL must
+be absolute HTTP(S) URLs. Metadata is optional except for `id`.
 
-If replacing an enabled bundled preset, remove its link before adding your custom
-file with the same `id`.
+Older custom targets require a manual update; follow
+[Updating older targets](docs/target-format.md#updating-older-targets) when
+installing the matching plugin and manager. Linked packaged presets update with
+the package. No automatic migration or compatibility overlay is used.

@@ -7,16 +7,9 @@
 #include <QList>
 #include <QString>
 
-enum class RequestBodyType
-{
-    Multipart,
-    Raw,
-    FormUrlencoded,
-    Json
-};
+enum class RequestBodyType { Multipart, Raw, FormUrlencoded, Json };
 
-struct ParsedRequestConfig
-{
+struct ParsedRequestConfig {
     QString url;
     QString method;
     RequestBodyType type = RequestBodyType::Multipart;
@@ -26,9 +19,9 @@ struct ParsedRequestConfig
     QString fileField;
     QMap<QString, QString> multipartFields;
     QMap<QString, QString> formFields;
-    QJsonValue jsonFields;
+    QJsonValue jsonValue;
 };
 
 namespace TargetRequestConfigParser {
-bool parse(const QJsonObject &target, ParsedRequestConfig *parsed, QList<TargetDiagnostic> *diagnostics = nullptr);
+bool parse(const QJsonObject& target, ParsedRequestConfig* parsed, QList<TargetDiagnostic>* diagnostics = nullptr);
 }

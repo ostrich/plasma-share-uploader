@@ -1,35 +1,49 @@
 {
+  "schemaVersion": 1,
   "id": "uguu",
   "displayName": "Uguu.se",
   "description": "Upload images to uguu.se",
   "icon": "image-x-generic",
-  "pluginTypes": ["ShareUrl", "Export"],
-  "constraints": ["mimeType:image/*"],
   "request": {
     "url": "https://uguu.se/upload",
     "method": "POST",
-    "multipart": {
+    "body": {
+      "type": "multipart",
       "fields": {},
       "fileField": "files[]"
     }
   },
   "preUpload": [
     {
-      "mime": ["image/jpeg", "image/tiff"],
+      "mime": [
+        "image/jpeg",
+        "image/tiff"
+      ],
       "fileHandling": "inplace_copy",
       "commands": [
         {
-          "argv": ["exiv2", "rm", "${FILE}"]
+          "argv": [
+            "exiv2",
+            "rm",
+            "${FILE}"
+          ]
         }
       ]
     }
   ],
   "response": {
-    "type": "json_pointer",
-    "pointer": "/files/0/url",
+    "url": {
+      "type": "json_pointer",
+      "pointer": "/files/0/url"
+    },
     "error": {
       "type": "json_pointer",
       "pointer": "/description"
     }
+  },
+  "accept": {
+    "mimeTypes": [
+      "image/*"
+    ]
   }
 }

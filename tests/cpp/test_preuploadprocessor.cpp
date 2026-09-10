@@ -11,8 +11,7 @@
 
 #include "testutils.h"
 
-class PreUploadProcessorTest final : public QObject
-{
+class PreUploadProcessorTest final : public QObject {
     Q_OBJECT
 
 private slots:
@@ -30,13 +29,11 @@ void PreUploadProcessorTest::returnsOriginalPathWhenNoRulesMatch()
 {
     QTemporaryDir dir;
     const QString filePath = writeTempFile(dir, QStringLiteral("sample.txt"), "hello");
-    const QJsonObject config{
-        {QStringLiteral("preUpload"),
-         QJsonArray{QJsonObject{
-             {QStringLiteral("mime"), QJsonArray{QStringLiteral("image/*")}},
-             {QStringLiteral("fileHandling"), QStringLiteral("inplace_copy")},
-             {QStringLiteral("commands"), QJsonArray{commandObject({QStringLiteral("tool"), QStringLiteral("${FILE}")})}},
-         }}}};
+    const QJsonObject config { { QStringLiteral("preUpload"),
+        QJsonArray { QJsonObject { { QStringLiteral("mime"), QJsonArray { QStringLiteral("image/*") } },
+            { QStringLiteral("fileHandling"), QStringLiteral("inplace_copy") },
+            { QStringLiteral("commands"),
+                QJsonArray { commandObject({ QStringLiteral("tool"), QStringLiteral("${FILE}") }) } } } } } };
 
     const PreUploadProcessor::Result result = PreUploadProcessor::preprocessFile(config, filePath);
 
@@ -51,19 +48,16 @@ void PreUploadProcessorTest::inplaceCopyRunsMultipleCommandsAndKeepsOriginalUnto
 
     QTemporaryDir dir;
     const QString filePath = writeTempFile(dir, QStringLiteral("sample.txt"), "hello");
-    const QJsonObject config{
-        {QStringLiteral("preUpload"),
-         QJsonArray{QJsonObject{
-             {QStringLiteral("mime"), QJsonArray{QStringLiteral("text/plain")}},
-             {QStringLiteral("fileHandling"), QStringLiteral("inplace_copy")},
-             {QStringLiteral("commands"),
-              QJsonArray{
-                  commandObject({pythonExecutable(), fixtureScriptPath(QStringLiteral("append_text.py")),
-                                 QStringLiteral("${FILE}"), QStringLiteral("-a")}),
-                  commandObject({pythonExecutable(), fixtureScriptPath(QStringLiteral("append_text.py")),
-                                 QStringLiteral("${FILE}"), QStringLiteral("-b")}),
-              }},
-         }}}};
+    const QJsonObject config { { QStringLiteral("preUpload"),
+        QJsonArray { QJsonObject { { QStringLiteral("mime"), QJsonArray { QStringLiteral("text/plain") } },
+            { QStringLiteral("fileHandling"), QStringLiteral("inplace_copy") },
+            { QStringLiteral("commands"),
+                QJsonArray {
+                    commandObject({ pythonExecutable(), fixtureScriptPath(QStringLiteral("append_text.py")),
+                        QStringLiteral("${FILE}"), QStringLiteral("-a") }),
+                    commandObject({ pythonExecutable(), fixtureScriptPath(QStringLiteral("append_text.py")),
+                        QStringLiteral("${FILE}"), QStringLiteral("-b") }),
+                } } } } } };
 
     const PreUploadProcessor::Result result = PreUploadProcessor::preprocessFile(config, filePath);
 
@@ -85,16 +79,13 @@ void PreUploadProcessorTest::outputFileProducesSeparateUploadFile()
 
     QTemporaryDir dir;
     const QString filePath = writeTempFile(dir, QStringLiteral("input.txt"), "payload");
-    const QJsonObject config{
-        {QStringLiteral("preUpload"),
-         QJsonArray{QJsonObject{
-             {QStringLiteral("mime"), QJsonArray{QStringLiteral("*/*")}},
-             {QStringLiteral("fileHandling"), QStringLiteral("output_file")},
-             {QStringLiteral("commands"),
-              QJsonArray{commandObject(
-                  {pythonExecutable(), fixtureScriptPath(QStringLiteral("copy_with_prefix.py")),
-                   QStringLiteral("${FILE}"), QStringLiteral("${OUT_FILE}"), QStringLiteral("prefix:")})}},
-         }}}};
+    const QJsonObject config { { QStringLiteral("preUpload"),
+        QJsonArray { QJsonObject { { QStringLiteral("mime"), QJsonArray { QStringLiteral("*/*") } },
+            { QStringLiteral("fileHandling"), QStringLiteral("output_file") },
+            { QStringLiteral("commands"),
+                QJsonArray { commandObject({ pythonExecutable(),
+                    fixtureScriptPath(QStringLiteral("copy_with_prefix.py")), QStringLiteral("${FILE}"),
+                    QStringLiteral("${OUT_FILE}"), QStringLiteral("prefix:") }) } } } } } };
 
     const PreUploadProcessor::Result result = PreUploadProcessor::preprocessFile(config, filePath);
 
@@ -112,15 +103,12 @@ void PreUploadProcessorTest::reportsCommandFailure()
 
     QTemporaryDir dir;
     const QString filePath = writeTempFile(dir, QStringLiteral("input.txt"), "payload");
-    const QJsonObject config{
-        {QStringLiteral("preUpload"),
-         QJsonArray{QJsonObject{
-             {QStringLiteral("mime"), QJsonArray{QStringLiteral("*/*")}},
-             {QStringLiteral("fileHandling"), QStringLiteral("inplace_copy")},
-             {QStringLiteral("commands"),
-              QJsonArray{commandObject({pythonExecutable(), fixtureScriptPath(QStringLiteral("fail.py")),
-                                        QStringLiteral("${FILE}"), QStringLiteral("boom")})}},
-         }}}};
+    const QJsonObject config { { QStringLiteral("preUpload"),
+        QJsonArray { QJsonObject { { QStringLiteral("mime"), QJsonArray { QStringLiteral("*/*") } },
+            { QStringLiteral("fileHandling"), QStringLiteral("inplace_copy") },
+            { QStringLiteral("commands"),
+                QJsonArray { commandObject({ pythonExecutable(), fixtureScriptPath(QStringLiteral("fail.py")),
+                    QStringLiteral("${FILE}"), QStringLiteral("boom") }) } } } } } };
 
     const PreUploadProcessor::Result result = PreUploadProcessor::preprocessFile(config, filePath);
 
@@ -135,16 +123,12 @@ void PreUploadProcessorTest::reportsCommandTimeout()
 
     QTemporaryDir dir;
     const QString filePath = writeTempFile(dir, QStringLiteral("input.txt"), "payload");
-    const QJsonObject config{
-        {QStringLiteral("preUpload"),
-         QJsonArray{QJsonObject{
-             {QStringLiteral("mime"), QJsonArray{QStringLiteral("*/*")}},
-             {QStringLiteral("fileHandling"), QStringLiteral("inplace_copy")},
-             {QStringLiteral("timeoutMs"), 100},
-             {QStringLiteral("commands"),
-              QJsonArray{commandObject({pythonExecutable(), fixtureScriptPath(QStringLiteral("sleep.py")),
-                                        QStringLiteral("${FILE}"), QStringLiteral("0.5")})}},
-         }}}};
+    const QJsonObject config { { QStringLiteral("preUpload"),
+        QJsonArray { QJsonObject { { QStringLiteral("mime"), QJsonArray { QStringLiteral("*/*") } },
+            { QStringLiteral("fileHandling"), QStringLiteral("inplace_copy") }, { QStringLiteral("timeoutMs"), 100 },
+            { QStringLiteral("commands"),
+                QJsonArray { commandObject({ pythonExecutable(), fixtureScriptPath(QStringLiteral("sleep.py")),
+                    QStringLiteral("${FILE}"), QStringLiteral("0.5") }) } } } } } };
 
     const PreUploadProcessor::Result result = PreUploadProcessor::preprocessFile(config, filePath);
 
@@ -159,12 +143,12 @@ void PreUploadProcessorTest::readOnlyInputCopyIsWritableAndOwned()
     const QString source = writeTempFile(dir, QStringLiteral("readonly.txt"), "original");
     QVERIFY(QFile::setPermissions(source, QFileDevice::ReadOwner | QFileDevice::ReadGroup | QFileDevice::ReadOther));
     const auto originalPermissions = QFile::permissions(source);
-    const QJsonObject config{{QStringLiteral("preUpload"), QJsonArray{QJsonObject{
-        {QStringLiteral("mime"), QJsonArray{QStringLiteral("*/*")}},
-        {QStringLiteral("fileHandling"), QStringLiteral("inplace_copy")},
-        {QStringLiteral("commands"), QJsonArray{commandObject({pythonExecutable(),
-            fixtureScriptPath(QStringLiteral("append_text.py")), QStringLiteral("${FILE}"), QStringLiteral("-changed")})}}
-    }}}};
+    const QJsonObject config { { QStringLiteral("preUpload"),
+        QJsonArray { QJsonObject { { QStringLiteral("mime"), QJsonArray { QStringLiteral("*/*") } },
+            { QStringLiteral("fileHandling"), QStringLiteral("inplace_copy") },
+            { QStringLiteral("commands"),
+                QJsonArray { commandObject({ pythonExecutable(), fixtureScriptPath(QStringLiteral("append_text.py")),
+                    QStringLiteral("${FILE}"), QStringLiteral("-changed") }) } } } } } };
     QString processedDir;
     {
         const auto result = PreUploadProcessor::preprocessFile(config, source);
@@ -186,11 +170,12 @@ void PreUploadProcessorTest::reportsMissingExecutable()
 {
     QTemporaryDir dir;
     const QString source = writeTempFile(dir, QStringLiteral("input.txt"), "payload");
-    const QJsonObject config{{QStringLiteral("preUpload"), QJsonArray{QJsonObject{
-        {QStringLiteral("mime"), QJsonArray{QStringLiteral("*/*")}},
-        {QStringLiteral("fileHandling"), QStringLiteral("inplace_copy")},
-        {QStringLiteral("commands"), QJsonArray{commandObject({dir.filePath(QStringLiteral("missing")), QStringLiteral("${FILE}")})}}
-    }}}};
+    const QJsonObject config { { QStringLiteral("preUpload"),
+        QJsonArray { QJsonObject { { QStringLiteral("mime"), QJsonArray { QStringLiteral("*/*") } },
+            { QStringLiteral("fileHandling"), QStringLiteral("inplace_copy") },
+            { QStringLiteral("commands"),
+                QJsonArray {
+                    commandObject({ dir.filePath(QStringLiteral("missing")), QStringLiteral("${FILE}") }) } } } } } };
     const auto result = PreUploadProcessor::preprocessFile(config, source);
     QVERIFY(!result.ok);
     QVERIFY(result.errorMessage.startsWith(QStringLiteral("Failed to start")));

@@ -6,6 +6,7 @@ set(IMSHARE_CORE_SOURCES
     targetconfigparser.cpp
     targetcoreconfigparser.cpp
     targetconfigvalidator.cpp
+    targetformat.h
     targetdefinition.cpp
     targeticonprovider.cpp
     targetpreuploadconfigparser.cpp
@@ -26,11 +27,11 @@ target_link_libraries(imshare_runtime PUBLIC imshare_core KF6::Purpose KF6::Noti
 add_library(runtimeuploadplugin MODULE runtimeplugin.cpp)
 target_link_libraries(runtimeuploadplugin PRIVATE imshare_runtime)
 
-add_library(imshare_manager STATIC configwidgets.cpp targeteditor.cpp credentialpanel.cpp
-    uploadtestrunner.cpp targettestpanel.cpp targetmanagerwindow.cpp)
-target_link_libraries(imshare_manager PUBLIC imshare_core)
-add_executable(plasma-share-uploader-config targetmanagerapp.cpp)
-target_link_libraries(plasma-share-uploader-config PRIVATE imshare_manager)
+add_subdirectory(ShareUploader)
+target_link_libraries(imshare_runtime PUBLIC imshare_ui imshare_uiplugin)
+qt_add_executable(plasma-share-uploader-config targetmanagerapp.cpp)
+qt_add_resources(plasma-share-uploader-config manager_style PREFIX "/" FILES qtquickcontrols2.conf)
+target_link_libraries(plasma-share-uploader-config PRIVATE imshare_ui imshare_uiplugin)
 install(TARGETS plasma-share-uploader-config DESTINATION ${KDE_INSTALL_BINDIR})
 install(FILES org.kde.plasma-share-uploader.config.desktop DESTINATION ${KDE_INSTALL_APPDIR})
 
@@ -75,4 +76,7 @@ install(TARGETS runtimeuploadplugin
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/targets
     DESTINATION ${KDE_INSTALL_DATADIR}/plasma-share-uploader
+)
+install(FILES ${CMAKE_SOURCE_DIR}/schemas/target-v1.schema.json
+    DESTINATION ${KDE_INSTALL_DATADIR}/plasma-share-uploader/schemas
 )

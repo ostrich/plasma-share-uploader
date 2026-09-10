@@ -1,31 +1,13 @@
 #include "targetdefinition.h"
 
-QString TargetDefinition::id() const
-{
-    return target.core.id;
-}
+QString TargetDefinition::id() const { return target.core.id; }
 
-QString TargetDefinition::displayName() const
-{
-    return target.core.displayName;
-}
+QString TargetDefinition::displayName() const { return target.core.displayName; }
 
-QString TargetDefinition::description() const
-{
-    return target.core.description;
-}
+QString TargetDefinition::description() const { return target.core.description; }
 
-QString TargetDefinition::icon() const
-{
-    return target.core.icon;
-}
+QString TargetDefinition::icon() const { return target.core.icon; }
 
-QStringList TargetDefinition::constraints() const
-{
-    return target.core.constraints;
-}
+QStringList TargetDefinition::mimeTypes() const { return target.core.mimeTypes; }
 
-QStringList TargetDefinition::extensions() const
-{
-    return target.core.extensions;
-}
+QStringList TargetDefinition::extensions() const { return target.core.extensions; }

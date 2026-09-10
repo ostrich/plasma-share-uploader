@@ -26,6 +26,13 @@ and Uguu configs passes both successful uploads and HTTP 400 error responses in
 the upstream formats. These fixtures verify local request construction and
 response handling; they do not substitute for live service tests.
 
+On 2026-09-10, all six definitions were converted to
+[target format version 1](target-format.md) and checked against its JSON Schema
+and C++ validator. This changes the configuration structure, not the service
+endpoints or API fields above. It does not extend the original service verification;
+vgy.me remains unverified. Pomf forks returning relative values need URL composition,
+which is not supported by version 1.
+
 ## Primary references
 
 - Catbox: [API documentation](https://catbox.moe/tools.php),

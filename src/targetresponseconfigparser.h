@@ -6,29 +6,19 @@
 #include <QList>
 #include <QString>
 
-enum class ResponseExtractorType
-{
-    TextUrl,
-    Regex,
-    JsonPointer,
-    Header,
-    RedirectUrl,
-    XmlXpath
-};
+enum class ResponseExtractorType { TextUrl, Regex, JsonPointer, Header, RedirectUrl, XmlPath };
 
-struct ParsedResponseExtractor
-{
+struct ParsedResponseExtractor {
     ResponseExtractorType type = ResponseExtractorType::TextUrl;
     QString pattern;
     int group = 1;
     QString pointer;
     QString name;
-    QString xpath;
+    QString path;
     bool valid = false;
 };
 
-struct ParsedResponseConfig
-{
+struct ParsedResponseConfig {
     ParsedResponseExtractor success;
     ParsedResponseExtractor error;
     ParsedResponseExtractor thumbnail;
@@ -36,5 +26,5 @@ struct ParsedResponseConfig
 };
 
 namespace TargetResponseConfigParser {
-bool parse(const QJsonObject &target, ParsedResponseConfig *parsed, QList<TargetDiagnostic> *diagnostics = nullptr);
+bool parse(const QJsonObject& target, ParsedResponseConfig* parsed, QList<TargetDiagnostic>* diagnostics = nullptr);
 }

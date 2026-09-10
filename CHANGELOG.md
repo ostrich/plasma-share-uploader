@@ -2,7 +2,14 @@
 
 ## Unreleased
 
-Added the **Upload Targets** configuration application and a Configure action in
+Replaced the configuration window and Share picker with Qt Quick/QML interfaces,
+keeping the target-management and upload workflows. Editing, credentials, asynchronous
+confirmation flows, and test inspection use C++ controllers and models. The
+resizable sidebar and permanent diagnostic strip remain, and compact forms scroll
+without overlapping the Save controls. QML is embedded in the installed binaries.
+Qt Declarative, Kirigami, and QQC2 desktop style are additional dependencies.
+
+Added the **Plasma Share Uploader Settings** application and a Configure action in
 the Share picker, including when no compatible targets are available. The app
 manages the existing active-directory model, edits the complete current target
 format, imports/exports single target JSONs, and tests unsaved drafts with local
@@ -10,9 +17,22 @@ validation, response fixtures, preprocessing previews, and explicit uploads.
 
 Managed credentials use KWallet and `${WALLET:name}` references. The plugin and
 manager share credential resolution and the upload engine; missing environment or
-wallet values stop uploads. KF6 Wallet is now a build/runtime dependency. Existing
-JSON definitions continue to work without conversion; definitions using wallet
-references require this updated plugin.
+wallet values stop uploads. KF6 Wallet is now a build/runtime dependency. Definitions using wallet references require this updated plugin.
+
+Introduced target format **schemaVersion 1** and a published JSON Schema. MIME
+alternatives and extension filters now live in `accept`; request bodies are
+normalized under `request.body`, with JSON payloads in `body.value`. The main
+extractor moves to `response.url`. Unused `pluginTypes` is removed, known field
+types are validated, JSON Pointer follows RFC 6901 (including root and empty-key
+pointers), and the limited XML extractor is named `xml_path`. Extracted URLs must
+be absolute HTTP(S); relative redirect locations remain resolved against the
+reply URL.
+
+**Custom targets require manual updates.** Install the matching manager, plugin,
+and packaged definitions together. Linked presets update with the package;
+independent custom files must follow the [format update guide](docs/target-format.md#updating-older-targets).
+Missing or unsupported schema versions are rejected. There is no permanent
+migration code or legacy compatibility reader.
 
 See the [configuration app guide](docs/configuration-app.md).
 

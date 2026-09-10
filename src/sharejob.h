@@ -12,6 +12,7 @@
 #include <QStringList>
 
 class TargetPickerDialog;
+class QWindow;
 
 class ShareJob final : public Purpose::Job
 {
@@ -43,6 +44,7 @@ private:
     PreUploadProcessor::Result m_prepared;
     QPointer<QObject> m_preprocessing;
     QPointer<TargetPickerDialog> m_picker;
+    QPointer<QWindow> m_pickerParent;
     bool m_started = false;
     int m_nextIndex = 0;
     QNetworkAccessManager m_network;

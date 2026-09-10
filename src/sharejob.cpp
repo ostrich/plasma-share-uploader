@@ -19,6 +19,32 @@
 #include <QNetworkReply>
 #include <QTemporaryDir>
 #include <QTimer>
+#include <QWidget>
+#include <QWindow>
+
+namespace {
+QWindow *invokingWindow()
+{
+    auto *window = QGuiApplication::focusWindow();
+    while (window && (window->type() == Qt::Popup || window->type() == Qt::ToolTip)) {
+        window = window->transientParent();
+    }
+    if (window) return window;
+    if (auto *modal = QApplication::activeModalWidget()) return modal->windowHandle();
+    if (auto *active = QApplication::activeWindow()) return active->windowHandle();
+
+    // Closing a Share menu can clear focus before Purpose starts the job.
+    // Use an unambiguous visible main window during that transition.
+    QWindow *candidate = nullptr;
+    const auto windows = QGuiApplication::topLevelWindows();
+    for (auto *visible : windows) {
+        if (!visible->isVisible() || visible->type() != Qt::Window) continue;
+        if (candidate) return nullptr;
+        candidate = visible;
+    }
+    return candidate;
+}
+}
 
 ShareJob::ShareJob(const QByteArray &configJson, QObject *parent, CredentialStore *credentials)
     : Purpose::Job(parent)
@@ -48,6 +74,7 @@ void ShareJob::start()
         return;
     }
     m_started = true;
+    m_pickerParent = invokingWindow();
     // Purpose callers may remove their temporary input as soon as start() returns.
     m_originalFiles = collectSharedFilePaths(data());
     const QString error = m_originalFiles.isEmpty()
@@ -232,12 +259,12 @@ QString ShareJob::stageInputFiles()
 
 void ShareJob::selectTarget()
 {
+    if (!m_pickerParent) m_pickerParent = invokingWindow();
     TargetRegistry registry;
     const TargetRegistry::LoadResult loadResult = registry.loadTargets();
     const QList<TargetDefinition> compatibleTargets = ConstraintMatcher::filterTargets(loadResult.targets, m_files);
 
-    QWidget *parentWidget = QApplication::activeWindow();
-    m_picker = new TargetPickerDialog(compatibleTargets, loadResult.diagnostics, parentWidget);
+    m_picker = new TargetPickerDialog(compatibleTargets, loadResult.diagnostics, m_pickerParent, this);
     connect(m_picker, &TargetPickerDialog::reloadRequested, this, [this]() {
         m_picker->disconnect(this);
         m_picker->hide();
@@ -245,11 +272,15 @@ void ShareJob::selectTarget()
         m_picker.clear();
         selectTarget();
     });
-    connect(m_picker, &QDialog::finished, this, [this](int result) {
+    connect(m_picker, &TargetPickerDialog::loadFailed, this, [this](const QString &error) {
+        m_picker->deleteLater(); m_picker.clear(); finishError(error);
+    });
+    connect(m_picker, &TargetPickerDialog::finished, this, [this](bool accepted) {
         const TargetDefinition selectedTarget = m_picker->selectedTarget();
+        m_picker->hide();
         m_picker->deleteLater();
         m_picker.clear();
-        if (result != QDialog::Accepted) {
+        if (!accepted) {
             finishCancelled();
         } else if (selectedTarget.id().isEmpty()) {
             finishError(QStringLiteral("No upload target selected."));

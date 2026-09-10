@@ -7,17 +7,15 @@
 #include <QString>
 #include <QStringList>
 
-struct ParsedTargetCoreConfig
-{
+struct ParsedTargetCoreConfig {
     QString id;
     QString displayName;
     QString description;
     QString icon;
-    QStringList pluginTypes;
-    QStringList constraints;
+    QStringList mimeTypes;
     QStringList extensions;
 };
 
 namespace TargetCoreConfigParser {
-bool parse(const QJsonObject &target, ParsedTargetCoreConfig *parsed, QList<TargetDiagnostic> *diagnostics = nullptr);
+bool parse(const QJsonObject& target, ParsedTargetCoreConfig* parsed, QList<TargetDiagnostic>* diagnostics = nullptr);
 }

@@ -6,6 +6,7 @@
 #include <QDir>
 #include <QFile>
 #include <QJsonDocument>
+#include <QImage>
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -15,8 +16,7 @@
 
 #include "testutils.h"
 
-class TargetRegistryTest final : public QObject
-{
+class TargetRegistryTest final : public QObject {
     Q_OBJECT
 
 private slots:
@@ -39,6 +39,7 @@ private slots:
     void validatorAccumulatesMultipleDiagnosticsForOneTarget();
     void constraintMatcherFiltersByMimeType();
     void constraintMatcherFiltersByExtension();
+    void acceptanceCombinesAlternativesCategoriesAndFiles();
     void validatesRegexExtractors_data();
     void validatesRegexExtractors();
 };
@@ -48,14 +49,14 @@ static QString bundledTargetsPath()
     return QDir(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../targets")).absolutePath();
 }
 
-static QJsonObject presetConfig(const QString &name = QStringLiteral("Raw Target"))
+static QJsonObject presetConfig(const QString& name = QStringLiteral("Raw Target"))
 {
     auto config = rawTarget(QUrl(QStringLiteral("https://example.test/upload")));
     config.insert(QStringLiteral("displayName"), name);
     return config;
 }
 
-static bool writeConfig(const QString &path, const QJsonObject &config)
+static bool writeConfig(const QString& path, const QJsonObject& config)
 {
     QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly)) {
@@ -75,13 +76,13 @@ void TargetRegistryTest::initializesBundledLinksOnce()
     QCOMPARE(result.targets.size(), 2);
     QCOMPARE(result.targets.at(0).id(), QStringLiteral("catbox"));
     QCOMPARE(result.targets.at(1).id(), QStringLiteral("uguu"));
-    for (const auto &name : {QStringLiteral("catbox.json"), QStringLiteral("uguu.json")}) {
+    for (const auto& name : { QStringLiteral("catbox.json"), QStringLiteral("uguu.json") }) {
         const QFileInfo link(QDir(activePath).filePath(name));
         QVERIFY(link.isSymLink());
         QCOMPARE(link.symLinkTarget(), QDir(bundledTargetsPath()).filePath(name));
     }
     QCOMPARE(QDir(dir.filePath(QStringLiteral("config"))).entryList(QDir::Dirs | QDir::Hidden | QDir::NoDotAndDotDot),
-             QStringList{QStringLiteral("targets")});
+        QStringList { QStringLiteral("targets") });
     QVERIFY(!QDir(QDir(activePath).filePath(QStringLiteral("examples"))).exists());
     QCOMPARE(registry.loadTargets().targets.size(), 2);
 }
@@ -90,8 +91,8 @@ void TargetRegistryTest::defaultActiveTargetsPathIsStable()
 {
     TargetRegistry registry;
     QCOMPARE(registry.activeTargetsPath(),
-             QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
-                 + QStringLiteral("/plasma-share-uploader/targets"));
+        QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
+            + QStringLiteral("/plasma-share-uploader/targets"));
 }
 
 void TargetRegistryTest::concurrentInitializationPublishesCompleteDirectories()
@@ -111,12 +112,12 @@ void TargetRegistryTest::concurrentInitializationPublishesCompleteDirectories()
     };
     auto first = std::async(std::launch::async, load);
     auto second = std::async(std::launch::async, load);
-    for (const auto &result : {first.get(), second.get()}) {
+    for (const auto& result : { first.get(), second.get() }) {
         QVERIFY(result.diagnostics.isEmpty());
         QCOMPARE(result.targets.size(), 20);
     }
     QCOMPARE(QDir(dir.path()).entryList(QDir::Dirs | QDir::Hidden | QDir::NoDotAndDotDot),
-             QStringList{QStringLiteral("targets")});
+        QStringList { QStringLiteral("targets") });
 }
 
 void TargetRegistryTest::existingEmptyDirectoryStaysEmpty()
@@ -155,9 +156,8 @@ void TargetRegistryTest::invalidActiveTargetDoesNotFallBack()
     TargetRegistry registry(bundledTargetsPath(), active.path());
     const auto result = registry.loadTargets();
     QVERIFY(result.targets.isEmpty());
-    QVERIFY(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto &diagnostic) {
-        return diagnostic.code == QLatin1StringView("request.url.empty");
-    }));
+    QVERIFY(std::any_of(result.diagnostics.begin(), result.diagnostics.end(),
+        [](const auto& diagnostic) { return diagnostic.jsonPath == QLatin1StringView("/request/url"); }));
 }
 
 void TargetRegistryTest::linkedPresetTracksUpdatesAndCanBeDisabled()
@@ -284,10 +284,10 @@ void TargetRegistryTest::exampleTargetFilesValidate()
     const QDir dir(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../targets/examples"));
     QVERIFY(dir.exists());
 
-    const QStringList fileNames = dir.entryList(QStringList{QStringLiteral("*.json")}, QDir::Files, QDir::Name);
+    const QStringList fileNames = dir.entryList(QStringList { QStringLiteral("*.json") }, QDir::Files, QDir::Name);
     QCOMPARE(fileNames.size(), 4);
 
-    for (const QString &fileName : fileNames) {
+    for (const QString& fileName : fileNames) {
         QFile file(dir.filePath(fileName));
         QVERIFY(file.open(QIODevice::ReadOnly));
         const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
@@ -295,14 +295,13 @@ void TargetRegistryTest::exampleTargetFilesValidate()
 
         QList<TargetDiagnostic> diagnostics;
         QVERIFY2(TargetConfigValidator::validateTarget(doc.object(), &diagnostics),
-                 qPrintable(fileName + QStringLiteral(": ")
-                            + [&diagnostics]() {
-                                  QStringList lines;
-                                  for (const TargetDiagnostic &diagnostic : diagnostics) {
-                                      lines.append(diagnostic.displayText());
-                                  }
-                                  return lines.join(QStringLiteral("; "));
-                              }()));
+            qPrintable(fileName + QStringLiteral(": ") + [&diagnostics]() {
+                QStringList lines;
+                for (const TargetDiagnostic& diagnostic : diagnostics) {
+                    lines.append(diagnostic.displayText());
+                }
+                return lines.join(QStringLiteral("; "));
+            }()));
     }
 }
 
@@ -315,38 +314,46 @@ void TargetRegistryTest::invalidTargetsProduceErrorsButDoNotBlockValidTargets()
     QFile badFile(userDir + QStringLiteral("/bad.json"));
     QVERIFY(badFile.open(QIODevice::WriteOnly));
     badFile.write(R"({
-      "id": "bad target",
-      "request": {
-        "url": "https://bad.test",
-        "method": "POST",
-        "multipart": {
-          "fields": {},
-          "fileField": "file"
-        }
-      },
-      "response": {
-        "type": "text_url"
-      }
-    })");
+  "schemaVersion": 1,
+  "id": "bad target",
+  "request": {
+    "url": "https://bad.test",
+    "method": "POST",
+    "body": {
+      "type": "multipart",
+      "fields": {},
+      "fileField": "file"
+    }
+  },
+  "response": {
+    "url": {
+      "type": "text_url"
+    }
+  }
+})");
     badFile.close();
 
     QFile goodFile(userDir + QStringLiteral("/good.json"));
     QVERIFY(goodFile.open(QIODevice::WriteOnly));
     goodFile.write(R"({
-      "id": "good",
-      "displayName": "Good",
-      "request": {
-        "url": "https://good.test",
-        "method": "POST",
-        "multipart": {
-          "fields": {},
-          "fileField": "file"
-        }
-      },
-      "response": {
-        "type": "text_url"
-      }
-    })");
+  "schemaVersion": 1,
+  "id": "good",
+  "displayName": "Good",
+  "request": {
+    "url": "https://good.test",
+    "method": "POST",
+    "body": {
+      "type": "multipart",
+      "fields": {},
+      "fileField": "file"
+    }
+  },
+  "response": {
+    "url": {
+      "type": "text_url"
+    }
+  }
+})");
     goodFile.close();
 
     TargetRegistry registry(QString(), userDir);
@@ -354,12 +361,10 @@ void TargetRegistryTest::invalidTargetsProduceErrorsButDoNotBlockValidTargets()
 
     QVERIFY(!result.diagnostics.isEmpty());
     QCOMPARE(result.targets.size(), 1);
-    QVERIFY(std::any_of(result.targets.begin(), result.targets.end(), [](const TargetDefinition &target) {
-        return target.id() == QLatin1StringView("good");
-    }));
-    QVERIFY(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const TargetDiagnostic &diagnostic) {
-        return diagnostic.filePath.endsWith(QStringLiteral("/bad.json"));
-    }));
+    QVERIFY(std::any_of(result.targets.begin(), result.targets.end(),
+        [](const TargetDefinition& target) { return target.id() == QLatin1StringView("good"); }));
+    QVERIFY(std::any_of(result.diagnostics.begin(), result.diagnostics.end(),
+        [](const TargetDiagnostic& diagnostic) { return diagnostic.filePath.endsWith(QStringLiteral("/bad.json")); }));
 }
 
 void TargetRegistryTest::malformedJsonProducesFileSpecificError()
@@ -376,7 +381,7 @@ void TargetRegistryTest::malformedJsonProducesFileSpecificError()
     TargetRegistry registry(QString(), userDir);
     const TargetRegistry::LoadResult result = registry.loadTargets();
 
-    QVERIFY(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const TargetDiagnostic &diagnostic) {
+    QVERIFY(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const TargetDiagnostic& diagnostic) {
         return diagnostic.filePath.endsWith(QStringLiteral("/broken.json"))
             && diagnostic.code == QLatin1StringView("file.invalid_json_object");
     }));
@@ -384,40 +389,40 @@ void TargetRegistryTest::malformedJsonProducesFileSpecificError()
 
 void TargetRegistryTest::validatorAccumulatesMultipleDiagnosticsForOneTarget()
 {
-    const QJsonObject target{
-        {QStringLiteral("id"), QStringLiteral("broken")},
-        {QStringLiteral("request"),
-         QJsonObject{
-             {QStringLiteral("url"), QStringLiteral("")},
-             {QStringLiteral("method"), QStringLiteral("GET")},
-             {QStringLiteral("type"), QStringLiteral("json")},
-             {QStringLiteral("json"), QJsonObject{}}}},
-        {QStringLiteral("response"),
-         QJsonObject{
-             {QStringLiteral("type"), QStringLiteral("json_pointer")},
-             {QStringLiteral("pointer"), QStringLiteral("bad")},
-             {QStringLiteral("thumbnail"), QJsonObject{{QStringLiteral("type"), QStringLiteral("header")}}}}},
-        {QStringLiteral("extensions"), QJsonArray{QStringLiteral(""), QStringLiteral("bad/ext")}}};
+    const QJsonObject target { { QStringLiteral("schemaVersion"), 1 },
+        { QStringLiteral("id"), QStringLiteral("broken") },
+        { QStringLiteral("request"),
+            QJsonObject { { QStringLiteral("url"), QStringLiteral("") },
+                { QStringLiteral("method"), QStringLiteral("GET") },
+                { QStringLiteral("body"), QJsonObject { { QStringLiteral("type"), QStringLiteral("json") } } } } },
+        { QStringLiteral("response"),
+            QJsonObject { { QStringLiteral("url"),
+                              QJsonObject { { QStringLiteral("type"), QStringLiteral("json_pointer") },
+                                  { QStringLiteral("pointer"), QStringLiteral("bad") } } },
+                { QStringLiteral("thumbnail"),
+                    QJsonObject { { QStringLiteral("type"), QStringLiteral("header") } } } } },
+        { QStringLiteral("accept"),
+            QJsonObject {
+                { QStringLiteral("extensions"), QJsonArray { QStringLiteral(""), QStringLiteral("bad/ext") } } } } };
 
     QList<TargetDiagnostic> diagnostics;
     QVERIFY(!TargetConfigValidator::validateTarget(target, &diagnostics));
-    QVERIFY(std::any_of(diagnostics.begin(), diagnostics.end(), [](const TargetDiagnostic &diagnostic) {
-        return diagnostic.code == QLatin1StringView("request.url.empty");
+    QVERIFY(std::any_of(diagnostics.begin(), diagnostics.end(),
+        [](const TargetDiagnostic& diagnostic) { return diagnostic.jsonPath == QLatin1StringView("/request/url"); }));
+    QVERIFY(std::any_of(diagnostics.begin(), diagnostics.end(), [](const TargetDiagnostic& diagnostic) {
+        return diagnostic.jsonPath == QLatin1StringView("/request/method");
     }));
-    QVERIFY(std::any_of(diagnostics.begin(), diagnostics.end(), [](const TargetDiagnostic &diagnostic) {
-        return diagnostic.code == QLatin1StringView("request.method.json");
+    QVERIFY(std::any_of(diagnostics.begin(), diagnostics.end(), [](const TargetDiagnostic& diagnostic) {
+        return diagnostic.jsonPath == QLatin1StringView("/request/body/value");
     }));
-    QVERIFY(std::any_of(diagnostics.begin(), diagnostics.end(), [](const TargetDiagnostic &diagnostic) {
-        return diagnostic.code == QLatin1StringView("request.json.missing");
+    QVERIFY(std::any_of(diagnostics.begin(), diagnostics.end(), [](const TargetDiagnostic& diagnostic) {
+        return diagnostic.jsonPath == QLatin1StringView("/response/url/pointer");
     }));
-    QVERIFY(std::any_of(diagnostics.begin(), diagnostics.end(), [](const TargetDiagnostic &diagnostic) {
-        return diagnostic.code == QLatin1StringView("response.pointer.invalid");
+    QVERIFY(std::any_of(diagnostics.begin(), diagnostics.end(), [](const TargetDiagnostic& diagnostic) {
+        return diagnostic.jsonPath == QLatin1StringView("/response/thumbnail/name");
     }));
-    QVERIFY(std::any_of(diagnostics.begin(), diagnostics.end(), [](const TargetDiagnostic &diagnostic) {
-        return diagnostic.code == QLatin1StringView("response.thumbnail.name.empty");
-    }));
-    QVERIFY(std::any_of(diagnostics.begin(), diagnostics.end(), [](const TargetDiagnostic &diagnostic) {
-        return diagnostic.code == QLatin1StringView("extensions.invalid") || diagnostic.code == QLatin1StringView("extensions.empty");
+    QVERIFY(std::any_of(diagnostics.begin(), diagnostics.end(), [](const TargetDiagnostic& diagnostic) {
+        return diagnostic.jsonPath.startsWith(QLatin1StringView("/accept/extensions/"));
     }));
 }
 
@@ -429,18 +434,18 @@ void TargetRegistryTest::constraintMatcherFiltersByMimeType()
 
     TargetDefinition imageTarget;
     imageTarget.target.core.id = QStringLiteral("images");
-    imageTarget.target.core.constraints = QStringList{QStringLiteral("mimeType:image/*")};
+    imageTarget.target.core.mimeTypes = QStringList { QStringLiteral("image/*") };
     imageTarget.target.valid = true;
 
     TargetDefinition anyTarget;
     anyTarget.target.core.id = QStringLiteral("any");
     anyTarget.target.valid = true;
 
-    QVERIFY(ConstraintMatcher::targetMatchesFiles(imageTarget, QStringList{imagePath}));
-    QVERIFY(!ConstraintMatcher::targetMatchesFiles(imageTarget, QStringList{textPath}));
+    QVERIFY(ConstraintMatcher::targetMatchesFiles(imageTarget, QStringList { imagePath }));
+    QVERIFY(!ConstraintMatcher::targetMatchesFiles(imageTarget, QStringList { textPath }));
 
-    const QList<TargetDefinition> filtered =
-        ConstraintMatcher::filterTargets(QList<TargetDefinition>{imageTarget, anyTarget}, QStringList{textPath});
+    const QList<TargetDefinition> filtered = ConstraintMatcher::filterTargets(
+        QList<TargetDefinition> { imageTarget, anyTarget }, QStringList { textPath });
     QCOMPARE(filtered.size(), 1);
     QCOMPARE(filtered.first().id(), QStringLiteral("any"));
 }
@@ -453,11 +458,40 @@ void TargetRegistryTest::constraintMatcherFiltersByExtension()
 
     TargetDefinition imageTarget;
     imageTarget.target.core.id = QStringLiteral("images");
-    imageTarget.target.core.extensions = QStringList{QStringLiteral("png"), QStringLiteral(".jpeg")};
+    imageTarget.target.core.extensions = QStringList { QStringLiteral("png"), QStringLiteral(".jpeg") };
     imageTarget.target.valid = true;
 
-    QVERIFY(ConstraintMatcher::targetMatchesFiles(imageTarget, QStringList{imagePath}));
-    QVERIFY(!ConstraintMatcher::targetMatchesFiles(imageTarget, QStringList{textPath}));
+    QVERIFY(ConstraintMatcher::targetMatchesFiles(imageTarget, QStringList { imagePath }));
+    QVERIFY(!ConstraintMatcher::targetMatchesFiles(imageTarget, QStringList { textPath }));
+}
+
+void TargetRegistryTest::acceptanceCombinesAlternativesCategoriesAndFiles()
+{
+    QTemporaryDir dir;
+    const auto png = writeTempFile(dir, QStringLiteral("image.PNG"), tinyPng());
+    const auto jpeg = dir.filePath(QStringLiteral("photo.jpg"));
+    QImage image(1, 1, QImage::Format_RGB32);
+    image.fill(Qt::red);
+    QVERIFY(image.save(jpeg, "JPEG"));
+    const auto renamedPng = writeTempFile(dir, QStringLiteral("image.txt"), tinyPng());
+    const auto fakePng = writeTempFile(dir, QStringLiteral("not-an-image.png"), "plain text");
+    auto config = rawTarget(QUrl(QStringLiteral("https://example.test/upload")));
+    config.insert(QStringLiteral("accept"),
+        QJsonObject {
+            { QStringLiteral("mimeTypes"), QJsonArray { QStringLiteral("IMAGE/PNG"), QStringLiteral("image/jpeg") } },
+            { QStringLiteral("extensions"), QJsonArray { QStringLiteral(".PNG"), QStringLiteral("jpg") } } });
+    ParsedTargetConfig parsed;
+    QVERIFY(TargetConfigParser::parse(config, &parsed));
+    TargetDefinition target;
+    target.target = parsed;
+    QVERIFY(ConstraintMatcher::targetMatchesFiles(target, { png, jpeg }));
+    QVERIFY(!ConstraintMatcher::targetMatchesFiles(target, { png, renamedPng }));
+    QVERIFY(!ConstraintMatcher::targetMatchesFiles(target, { jpeg, fakePng }));
+    target.target.core.extensions.clear();
+    QVERIFY(ConstraintMatcher::targetMatchesFiles(target, { png, jpeg, renamedPng }));
+    QVERIFY(!ConstraintMatcher::targetMatchesFiles(target, { fakePng }));
+    target.target.core.mimeTypes.clear();
+    QVERIFY(ConstraintMatcher::targetMatchesFiles(target, { fakePng, renamedPng }));
 }
 
 void TargetRegistryTest::validatesRegexExtractors_data()
@@ -478,13 +512,14 @@ void TargetRegistryTest::validatesRegexExtractors()
     QFETCH(QString, pattern);
     QFETCH(QJsonValue, group);
     QFETCH(bool, valid);
-    const QJsonObject extractor{{QStringLiteral("type"), QStringLiteral("regex")},
-                                {QStringLiteral("pattern"), pattern}, {QStringLiteral("group"), group}};
-    for (const auto &field : {QString(), QStringLiteral("error"), QStringLiteral("thumbnail"), QStringLiteral("deletion")}) {
+    const QJsonObject extractor { { QStringLiteral("type"), QStringLiteral("regex") },
+        { QStringLiteral("pattern"), pattern }, { QStringLiteral("group"), group } };
+    for (const auto& field :
+        { QString(), QStringLiteral("error"), QStringLiteral("thumbnail"), QStringLiteral("deletion") }) {
         auto config = rawTarget(QUrl(QStringLiteral("https://example.test/upload")));
         auto response = config.value(QStringLiteral("response")).toObject();
         if (field.isEmpty()) {
-            response = extractor;
+            response.insert(QStringLiteral("url"), extractor);
         } else {
             response.insert(field, extractor);
         }
@@ -494,7 +529,7 @@ void TargetRegistryTest::validatesRegexExtractors()
         QCOMPARE(diagnostics.isEmpty(), valid);
         if (!valid) {
             QVERIFY(diagnostics.first().jsonPath.endsWith(QStringLiteral("/pattern"))
-                    || diagnostics.first().jsonPath.endsWith(QStringLiteral("/group")));
+                || diagnostics.first().jsonPath.endsWith(QStringLiteral("/group")));
         }
     }
 }

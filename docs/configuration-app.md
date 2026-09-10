@@ -1,6 +1,6 @@
-# Upload Targets configuration app
+# Plasma Share Uploader Settings
 
-Launch **Upload Targets** from the application menu, run
+Launch **Plasma Share Uploader Settings** from the application menu, run
 `plasma-share-uploader-config`, or choose **Configure...** in the Share picker.
 The manager edits the same JSON definitions that the Share plugin reads.
 
@@ -35,11 +35,11 @@ list, inherited configuration overlay, migration process, or background daemon.
 
 ## Edit a definition
 
-The editor exposes all fields in the current target format:
+The editor exposes all fields in [target format version 1](target-format.md):
 
 | Page | Contents |
 | --- | --- |
-| General | Name, description, icon, ID, MIME constraints, extensions, compatibility plugin types |
+| General | Name, description, icon, ID, accepted MIME types and extensions |
 | Request | Endpoint, POST/PUT, multipart/raw/form URL encoded/JSON bodies, file field, content type, headers, query parameters |
 | Credentials | API key, bearer, and basic-auth helpers backed by KWallet |
 | Response | Shared URL and optional thumbnail, deletion, and error extractors; text, JSON pointer, regex/group, header, redirect, and XML path |
@@ -51,6 +51,13 @@ Form edits and JSON edits share one document. Unknown fields and JSON value
 types are preserved. Invalid JSON remains repairable in the JSON page; validation
 messages identify field paths. Duplicate table names are reported before they
 can overwrite another value. Use the JSON page to repair unsupported structures.
+
+The General page edits `accept.mimeTypes` and `accept.extensions`. Entries within
+a list are alternatives; both nonempty categories must match. Request settings
+use `request.body`; the primary response extractor is `response.url`. A JSON body
+uses `body.value`, including scalar and null values. XML extraction uses the
+limited `xml_path` syntax. Empty JSON Pointer selects the whole response; `/`
+selects an empty object key. New targets include `schemaVersion: 1`.
 
 The status row below the editor stays one line high. **Needs attention** shows
 the issue count; **Details...** opens the complete, selectable diagnostics.
@@ -125,7 +132,9 @@ fields cannot all be identified automatically. Export to a separate regular file
 Supply referenced environment values or wallet entries on the receiving machine.
 The app never retrieves wallet values to embed them in an export.
 
-This release supports our single-target JSON format. ShareX `.sxcu` conversion,
+This release supports our single-target JSON format, version 1. Older imports
+remain editable as disabled drafts but require the [manual format changes](target-format.md#updating-older-targets)
+before enabling; there is no automatic conversion. ShareX `.sxcu` conversion,
 bulk transfer, declared service-setup forms, and broader preferences remain in
 the [plan](configuration-app-plan.md).
 
@@ -167,10 +176,12 @@ for secrets that this process has never resolved.
 
 ## Development and verification
 
-Build dependencies now include KF6 Wallet. For an isolated manager workspace:
+Build dependencies include KF6 Wallet. Install the Python test dependencies as
+described in the [test setup](../README.md#test). For an isolated manager workspace:
 
 ```sh
-cmake -S . -B build -DBUILD_TESTING=ON -DPLASMA_SHARE_UPLOADER_USE_SOURCE_DATA=ON
+cmake -S . -B build -DBUILD_TESTING=ON -DPLASMA_SHARE_UPLOADER_USE_SOURCE_DATA=ON \
+  -DPython3_EXECUTABLE=/tmp/plasma-share-test-venv/bin/python
 cmake --build build
 mkdir -p /tmp/my-upload-targets
 build/src/plasma-share-uploader-config --targets-dir /tmp/my-upload-targets --presets-dir "$PWD/targets"

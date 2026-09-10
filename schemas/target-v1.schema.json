@@ -1,0 +1,507 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/ostrich/plasma-share-uploader/master/schemas/target-v1.schema.json",
+  "title": "Plasma Share Uploader target, schema version 1",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$(?![\\s\\S])"
+    },
+    "displayName": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "icon": {
+      "type": "string"
+    },
+    "accept": {
+      "type": "object",
+      "properties": {
+        "mimeTypes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?:\\*/\\*|[A-Za-z0-9!#$%&'+.^_`|~-]+/(?:\\*|[A-Za-z0-9!#$%&'+.^_`|~-]+))$(?![\\s\\S])"
+          }
+        },
+        "extensions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^\\.?[^.\\s/*\\\\]+$(?![\\s\\S])"
+          }
+        }
+      },
+      "required": [],
+      "additionalProperties": true
+    },
+    "request": {
+      "$ref": "#/$defs/request"
+    },
+    "response": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "$ref": "#/$defs/extractor"
+        },
+        "thumbnail": {
+          "$ref": "#/$defs/extractor"
+        },
+        "deletion": {
+          "$ref": "#/$defs/extractor"
+        },
+        "error": {
+          "$ref": "#/$defs/extractor"
+        },
+        "type": false,
+        "pattern": false,
+        "pointer": false,
+        "name": false,
+        "group": false,
+        "xpath": false,
+        "path": false
+      },
+      "required": [
+        "url"
+      ],
+      "additionalProperties": true
+    },
+    "preUpload": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/preUploadRule"
+      }
+    },
+    "pluginTypes": false,
+    "constraints": false,
+    "extensions": false
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "request",
+    "response"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "stringMap": {
+      "type": "object",
+      "propertyNames": {
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "body": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "multipart",
+            "raw",
+            "form_urlencoded",
+            "json"
+          ]
+        },
+        "fileField": {
+          "type": "string"
+        },
+        "fields": {
+          "$ref": "#/$defs/stringMap"
+        },
+        "contentType": {
+          "type": "string"
+        },
+        "value": {}
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": true,
+      "description": "Only settings for the selected type are used. Inactive settings may be retained when switching formats.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "multipart"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "fileField"
+            ],
+            "properties": {
+              "fileField": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "form_urlencoded"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "fields"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "json"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ]
+    },
+    "request": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "method": {
+          "enum": [
+            "POST",
+            "PUT"
+          ]
+        },
+        "headers": {
+          "$ref": "#/$defs/stringMap"
+        },
+        "query": {
+          "$ref": "#/$defs/stringMap"
+        },
+        "body": {
+          "$ref": "#/$defs/body"
+        },
+        "type": false,
+        "multipart": false,
+        "formUrlencoded": false,
+        "json": false,
+        "contentType": false
+      },
+      "required": [
+        "url",
+        "method",
+        "body"
+      ],
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "body": {
+                "properties": {
+                  "type": {
+                    "const": "multipart"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              }
+            },
+            "required": [
+              "body"
+            ]
+          },
+          "then": {
+            "properties": {
+              "method": {
+                "const": "POST"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "extractor": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "text_url",
+            "json_pointer",
+            "regex",
+            "header",
+            "redirect_url",
+            "xml_path"
+          ]
+        },
+        "pointer": {
+          "type": "string"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "group": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647,
+          "default": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "xpath": false
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "json_pointer"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "pointer"
+            ],
+            "properties": {
+              "pointer": {
+                "type": "string",
+                "pattern": "^(?:/(?:[^~/]|~[01])*)*$(?![\\s\\S])"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "regex"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "pattern"
+            ],
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "header"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "xml_path"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "path"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "^/[A-Za-z_][A-Za-z0-9_.:-]*(?:/[A-Za-z_][A-Za-z0-9_.:-]*(?:\\[[1-9][0-9]*\\])?)*$(?![\\s\\S])"
+              }
+            }
+          }
+        }
+      ],
+      "description": "Known field types are checked even when inactive; extractor syntax is checked for the selected type."
+    },
+    "command": {
+      "type": "object",
+      "properties": {
+        "argv": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contains": {
+            "type": "string",
+            "pattern": "\\$\\{FILE\\}"
+          }
+        }
+      },
+      "required": [
+        "argv"
+      ],
+      "additionalProperties": true
+    },
+    "preUploadRule": {
+      "type": "object",
+      "properties": {
+        "mime": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^(?:\\*/\\*|[A-Za-z0-9!#$%&'+.^_`|~-]+/(?:\\*|[A-Za-z0-9!#$%&'+.^_`|~-]+))$(?![\\s\\S])"
+          }
+        },
+        "fileHandling": {
+          "enum": [
+            "inplace_copy",
+            "output_file"
+          ]
+        },
+        "commands": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/command"
+          }
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "default": 30000
+        }
+      },
+      "required": [
+        "mime",
+        "fileHandling",
+        "commands"
+      ],
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "fileHandling": {
+                "const": "output_file"
+              }
+            },
+            "required": [
+              "fileHandling"
+            ]
+          },
+          "then": {
+            "properties": {
+              "commands": {
+                "maxItems": 1,
+                "items": {
+                  "properties": {
+                    "argv": {
+                      "contains": {
+                        "type": "string",
+                        "pattern": "\\$\\{OUT_FILE\\}"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "fileHandling": {
+                "const": "inplace_copy"
+              }
+            },
+            "required": [
+              "fileHandling"
+            ]
+          },
+          "then": {
+            "properties": {
+              "commands": {
+                "items": {
+                  "properties": {
+                    "argv": {
+                      "not": {
+                        "contains": {
+                          "type": "string",
+                          "pattern": "\\$\\{OUT_FILE\\}"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
