@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.0
 
 Replaced the configuration window and Share picker with Qt Quick/QML interfaces,
 keeping the target-management and upload workflows. Editing, credentials, asynchronous
@@ -17,7 +17,8 @@ validation, response fixtures, preprocessing previews, and explicit uploads.
 
 Managed credentials use KWallet and `${WALLET:name}` references. The plugin and
 manager share credential resolution and the upload engine; missing environment or
-wallet values stop uploads. KF6 Wallet is now a build/runtime dependency. Definitions using wallet references require this updated plugin.
+wallet values stop uploads. KF6 Wallet is now a build/runtime dependency.
+Definitions using wallet references require this updated plugin.
 
 Introduced target format **schemaVersion 1** and a published JSON Schema. MIME
 alternatives and extension filters now live in `accept`; request bodies are

@@ -4,7 +4,7 @@
     "Description": "Upload this file to one of your configured services",
     "Icon": "image-x-generic",
     "License": "GPL-3.0-or-later",
-    "Version": "0.3.0"
+    "Version": "1.0.0"
   },
   "X-Purpose-ActionDisplay": "Upload To...",
   "X-Purpose-PluginTypes": ["ShareUrl", "Export"]
