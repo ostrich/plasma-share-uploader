@@ -431,10 +431,6 @@ void ShareJobTest::pickerCancellationFinishesAfterStartReturns()
     QVERIFY(target.open(QIODevice::WriteOnly));
     target.write(QJsonDocument(config).toJson());
     target.close();
-    QFile state(configRoot + QStringLiteral("/state.json"));
-    QVERIFY(state.open(QIODevice::WriteOnly));
-    state.write(R"({"disabledBundledTargets":["catbox","uguu"]})");
-    state.close();
     ShareJob job(QByteArray{});
     job.setAutoDelete(false);
     job.setData(QJsonObject{{QStringLiteral("url"), QUrl::fromLocalFile(file).toString()}});

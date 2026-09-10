@@ -14,15 +14,13 @@ public:
         QList<TargetDiagnostic> diagnostics;
     };
 
-    explicit TargetRegistry(QString systemPath = {}, QString userPath = {}, QString statePath = {});
+    explicit TargetRegistry(QString bundledPath = {}, QString activePath = {});
 
     LoadResult loadTargets() const;
-    QString systemTargetsPath() const;
-    QString userTargetsPath() const;
-    QString stateFilePath() const;
+    QString bundledTargetsPath() const;
+    QString activeTargetsPath() const;
 
 private:
-    QString m_systemPath;
-    QString m_userPath;
-    QString m_statePath;
+    QString m_bundledPath;
+    QString m_activePath;
 };

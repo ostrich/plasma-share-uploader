@@ -101,8 +101,6 @@ private:
 
 TargetPickerDialog::TargetPickerDialog(const QList<TargetDefinition> &targets,
                                        const QList<TargetDiagnostic> &diagnostics,
-                                       const QString &systemTargetsPath,
-                                       const QString &userTargetsPath,
                                        QWidget *parent)
     : QDialog(parent)
 {

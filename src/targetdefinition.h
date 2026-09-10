@@ -6,13 +6,7 @@
 #include <QStringList>
 
 struct TargetDefinition {
-    enum class Source {
-        System,
-        User,
-    };
-
     ParsedTargetConfig target;
-    Source source = Source::System;
 
     QString id() const;
     QString displayName() const;
@@ -20,5 +14,4 @@ struct TargetDefinition {
     QString icon() const;
     QStringList constraints() const;
     QStringList extensions() const;
-    bool isBundled() const;
 };

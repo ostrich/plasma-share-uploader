@@ -43,39 +43,58 @@ For a custom plugin location, set `KDE_INSTALL_QTPLUGINDIR` at configure time an
 add that directory to the host application's `QT_PLUGIN_PATH`.
 Restart Dolphin/Gwenview/other Purpose-Share-enabled app after installing so the `Upload To...` Share action shows up.
 
-Installed builds use installed data. To use targets and icons from the checkout
-during development, configure with `-DPLASMA_SHARE_UPLOADER_USE_SOURCE_DATA=ON`.
+Installed builds use installed presets and icons. To use the checkout as the
+preset and icon source during development, configure with
+`-DPLASMA_SHARE_UPLOADER_USE_SOURCE_DATA=ON`. This controls initial default links;
+existing active entries keep their current destinations.
 
 ## Targets
 
-Targets are loaded at runtime from:
-- system defaults: `${CMAKE_INSTALL_PREFIX}/share/plasma-share-uploader/targets/*.json`
-- user overrides/custom targets: `~/.config/plasma-share-uploader/targets/*.json`
-- user state: `~/.config/plasma-share-uploader/state.json`
+The active target directory is `~/.config/plasma-share-uploader/targets/`
+(or `$XDG_CONFIG_HOME/plasma-share-uploader/targets/` when set). Only top-level
+`*.json` files in this directory are loaded:
 
-Each file contains exactly one target object. Targets are merged by `id`, and user
-targets override system targets with the same `id`.
+- Symlinks enable packaged presets and receive their updates automatically.
+- Regular files are independent custom targets.
+- Subdirectories, including `disabled/`, are ignored.
 
-`state.json` may define:
-- `disabledBundledTargets`: array of bundled target ids to suppress without modifying the
-  files under `/usr/share`. User targets with the same `id` still win normally.
+When the directory does not exist, the first share creates it with links to the
+bundled Catbox and Uguu presets. An existing directory is used exactly as it is,
+even if empty. New presets shipped in later package versions are not automatically
+enabled in an existing directory.
 
-Example `state.json`:
+Packaged presets live under
+`${CMAKE_INSTALL_PREFIX}/share/plasma-share-uploader/targets/` (normally `/usr/share/...`).
+Their filenames stay stable across releases so enabled links continue to work.
+The `examples/` subdirectory contains templates that need configuration before use.
 
-```json
-{
-  "disabledBundledTargets": ["catbox", "uguu"]
-}
+For example, enable Catbox with:
+
+```sh
+target_dir="${XDG_CONFIG_HOME:-$HOME/.config}/plasma-share-uploader/targets"
+mkdir -p "$target_dir"
+ln -s /usr/share/plasma-share-uploader/targets/catbox.json "$target_dir/catbox.json"
 ```
 
-After editing the user config, restart the Share-enabled app to reload the target list.
+Disable a linked preset by removing its link. To preserve a custom configuration
+while disabling it, move the file into `targets/disabled/`; move it back to re-enable
+it. Keeping the active directory itself preserves an intentionally empty selection.
 
-If target configuration errors are found, the picker shows an indicator. Opening it displays diagnostics by file.
+To customize an enabled preset, replace its symlink with a copy of the packaged
+JSON before editing. The copy is independent and will no longer receive packaged
+updates. Do not edit through the symlink. Keep only one active definition for each
+`id`; duplicate IDs produce a diagnostic, and the first valid file in filename
+order is used.
+
+The target directory is read each time you start a new share. Invalid configs and
+broken links produce file-specific diagnostics in the picker.
+
+For updating an existing installation, see [the release notes](CHANGELOG.md).
 
 ### Target format
 
 Each target file is a single JSON object with these required fields:
-- `id`: lowercase identifier for overrides and merges; `[a-z0-9][a-z0-9_-]*`.
+- `id`: unique lowercase identifier; `[a-z0-9][a-z0-9_-]*`.
 - `displayName`: human-friendly name shown in the picker.
 - `description`: short description shown under the target name.
 - `icon`: icon name (e.g. `image-x-generic`).
@@ -234,5 +253,5 @@ uploads in its output and copying their URLs to the clipboard.
 Save it as its own file, for example
 `~/.config/plasma-share-uploader/targets/example.json`.
 
-To override a bundled target, give your file the same `id` as the system target. The
-user definition wins at runtime.
+If replacing an enabled bundled preset, remove its link before adding your custom
+file with the same `id`.

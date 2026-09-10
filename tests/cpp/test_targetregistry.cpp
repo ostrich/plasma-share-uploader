@@ -6,9 +6,12 @@
 #include <QDir>
 #include <QFile>
 #include <QJsonDocument>
+#include <QSaveFile>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QtTest>
+#include <barrier>
+#include <future>
 
 #include "testutils.h"
 
@@ -17,14 +20,20 @@ class TargetRegistryTest final : public QObject
     Q_OBJECT
 
 private slots:
-    void loadsBundledSystemTargets();
+    void initializesBundledLinksOnce();
+    void concurrentInitializationPublishesCompleteDirectories();
     void exampleTargetFilesValidate();
-    void defaultUserTargetsPathIsStable();
-    void userTargetsOverrideSystemTargetsById();
-    void invalidUserOverrideFallsBackToSystemTarget();
-    void disabledBundledTargetIsSuppressed();
-    void userOverrideStillWinsWhenBundledTargetIsDisabled();
-    void disabledBundledTargetStaysSuppressedWhenUserOverrideIsInvalid();
+    void defaultActiveTargetsPathIsStable();
+    void existingEmptyDirectoryStaysEmpty();
+    void loadsOnlyActiveTargets();
+    void invalidActiveTargetDoesNotFallBack();
+    void linkedPresetTracksUpdatesAndCanBeDisabled();
+    void customizedCopyIsIndependent();
+    void disabledSubdirectoryIsIgnored();
+    void missingPresetsLeaveInitializationRetryable();
+    void invalidActiveDirectoryIsPreserved();
+    void brokenLinkProducesDiagnostic();
+    void duplicateIdsProduceDiagnostic();
     void invalidTargetsProduceErrorsButDoNotBlockValidTargets();
     void malformedJsonProducesFileSpecificError();
     void validatorAccumulatesMultipleDiagnosticsForOneTarget();
@@ -34,15 +43,240 @@ private slots:
     void validatesRegexExtractors();
 };
 
-void TargetRegistryTest::loadsBundledSystemTargets()
+static QString bundledTargetsPath()
 {
-    TargetRegistry registry(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../targets"), QStringLiteral("/nonexistent"));
-    const TargetRegistry::LoadResult result = registry.loadTargets();
+    return QDir(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../targets")).absolutePath();
+}
 
+static QJsonObject presetConfig(const QString &name = QStringLiteral("Raw Target"))
+{
+    auto config = rawTarget(QUrl(QStringLiteral("https://example.test/upload")));
+    config.insert(QStringLiteral("displayName"), name);
+    return config;
+}
+
+static bool writeConfig(const QString &path, const QJsonObject &config)
+{
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) {
+        return false;
+    }
+    const auto bytes = QJsonDocument(config).toJson();
+    return file.write(bytes) == bytes.size() && file.commit();
+}
+
+void TargetRegistryTest::initializesBundledLinksOnce()
+{
+    QTemporaryDir dir;
+    const QString activePath = dir.filePath(QStringLiteral("config/targets"));
+    TargetRegistry registry(bundledTargetsPath(), activePath);
+    const auto result = registry.loadTargets();
     QVERIFY(result.diagnostics.isEmpty());
     QCOMPARE(result.targets.size(), 2);
     QCOMPARE(result.targets.at(0).id(), QStringLiteral("catbox"));
     QCOMPARE(result.targets.at(1).id(), QStringLiteral("uguu"));
+    for (const auto &name : {QStringLiteral("catbox.json"), QStringLiteral("uguu.json")}) {
+        const QFileInfo link(QDir(activePath).filePath(name));
+        QVERIFY(link.isSymLink());
+        QCOMPARE(link.symLinkTarget(), QDir(bundledTargetsPath()).filePath(name));
+    }
+    QCOMPARE(QDir(dir.filePath(QStringLiteral("config"))).entryList(QDir::Dirs | QDir::Hidden | QDir::NoDotAndDotDot),
+             QStringList{QStringLiteral("targets")});
+    QVERIFY(!QDir(QDir(activePath).filePath(QStringLiteral("examples"))).exists());
+    QCOMPARE(registry.loadTargets().targets.size(), 2);
+}
+
+void TargetRegistryTest::defaultActiveTargetsPathIsStable()
+{
+    TargetRegistry registry;
+    QCOMPARE(registry.activeTargetsPath(),
+             QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
+                 + QStringLiteral("/plasma-share-uploader/targets"));
+}
+
+void TargetRegistryTest::concurrentInitializationPublishesCompleteDirectories()
+{
+    QTemporaryDir bundled;
+    QTemporaryDir dir;
+    for (int i = 0; i < 20; ++i) {
+        auto config = presetConfig();
+        config.insert(QStringLiteral("id"), QStringLiteral("target-%1").arg(i));
+        QVERIFY(writeConfig(bundled.filePath(QStringLiteral("target-%1.json").arg(i)), config));
+    }
+    const QString active = dir.filePath(QStringLiteral("targets"));
+    std::barrier ready(2);
+    const auto load = [&]() {
+        ready.arrive_and_wait();
+        return TargetRegistry(bundled.path(), active).loadTargets();
+    };
+    auto first = std::async(std::launch::async, load);
+    auto second = std::async(std::launch::async, load);
+    for (const auto &result : {first.get(), second.get()}) {
+        QVERIFY(result.diagnostics.isEmpty());
+        QCOMPARE(result.targets.size(), 20);
+    }
+    QCOMPARE(QDir(dir.path()).entryList(QDir::Dirs | QDir::Hidden | QDir::NoDotAndDotDot),
+             QStringList{QStringLiteral("targets")});
+}
+
+void TargetRegistryTest::existingEmptyDirectoryStaysEmpty()
+{
+    QTemporaryDir active;
+    TargetRegistry registry(QStringLiteral("/nonexistent/presets"), active.path());
+    const auto result = registry.loadTargets();
+    QVERIFY(result.targets.isEmpty());
+    QVERIFY(result.diagnostics.isEmpty());
+    QVERIFY(QDir(active.path()).isEmpty());
+}
+
+void TargetRegistryTest::loadsOnlyActiveTargets()
+{
+    QTemporaryDir active;
+    auto config = presetConfig(QStringLiteral("My Catbox"));
+    config.insert(QStringLiteral("id"), QStringLiteral("catbox"));
+    QVERIFY(writeConfig(active.filePath(QStringLiteral("catbox.json")), config));
+    TargetRegistry registry(bundledTargetsPath(), active.path());
+    const auto result = registry.loadTargets();
+    QVERIFY(result.diagnostics.isEmpty());
+    QCOMPARE(result.targets.size(), 1);
+    QCOMPARE(result.targets.first().displayName(), QStringLiteral("My Catbox"));
+    QVERIFY(!QFileInfo(active.filePath(QStringLiteral("catbox.json"))).isSymLink());
+}
+
+void TargetRegistryTest::invalidActiveTargetDoesNotFallBack()
+{
+    QTemporaryDir active;
+    auto config = presetConfig();
+    config.insert(QStringLiteral("id"), QStringLiteral("catbox"));
+    auto request = config.value(QStringLiteral("request")).toObject();
+    request.insert(QStringLiteral("url"), QString());
+    config.insert(QStringLiteral("request"), request);
+    QVERIFY(writeConfig(active.filePath(QStringLiteral("catbox.json")), config));
+    TargetRegistry registry(bundledTargetsPath(), active.path());
+    const auto result = registry.loadTargets();
+    QVERIFY(result.targets.isEmpty());
+    QVERIFY(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto &diagnostic) {
+        return diagnostic.code == QLatin1StringView("request.url.empty");
+    }));
+}
+
+void TargetRegistryTest::linkedPresetTracksUpdatesAndCanBeDisabled()
+{
+    QTemporaryDir bundled;
+    QTemporaryDir dir;
+    const QString preset = bundled.filePath(QStringLiteral("raw.json"));
+    QVERIFY(writeConfig(preset, presetConfig()));
+    const QString active = dir.filePath(QStringLiteral("targets"));
+    const QString link = QDir(active).filePath(QStringLiteral("raw.json"));
+    TargetRegistry registry(bundled.path(), active);
+    QCOMPARE(registry.loadTargets().targets.first().displayName(), QStringLiteral("Raw Target"));
+    // Atomic replacement models a package upgrade without changing the enabled link.
+    QVERIFY(writeConfig(preset, presetConfig(QStringLiteral("Updated Target"))));
+    auto added = presetConfig();
+    added.insert(QStringLiteral("id"), QStringLiteral("new-preset"));
+    QVERIFY(writeConfig(bundled.filePath(QStringLiteral("new.json")), added));
+    auto result = registry.loadTargets();
+    QVERIFY(result.diagnostics.isEmpty());
+    QCOMPARE(result.targets.size(), 1);
+    QCOMPARE(result.targets.first().displayName(), QStringLiteral("Updated Target"));
+    QVERIFY(QFileInfo(link).isSymLink());
+    QVERIFY(QFile::remove(link));
+    QVERIFY(registry.loadTargets().targets.isEmpty());
+    QVERIFY(QFileInfo::exists(preset));
+    QVERIFY(QFile::link(preset, link));
+    result = registry.loadTargets();
+    QVERIFY(result.diagnostics.isEmpty());
+    QCOMPARE(result.targets.size(), 1);
+}
+
+void TargetRegistryTest::customizedCopyIsIndependent()
+{
+    QTemporaryDir bundled;
+    QTemporaryDir active;
+    const QString preset = bundled.filePath(QStringLiteral("raw.json"));
+    const QString custom = active.filePath(QStringLiteral("raw.json"));
+    QVERIFY(writeConfig(preset, presetConfig()));
+    QVERIFY(QFile::link(preset, custom));
+    QVERIFY(QFile::remove(custom));
+    QVERIFY(QFile::copy(preset, custom));
+    QVERIFY(writeConfig(custom, presetConfig(QStringLiteral("Custom"))));
+    QVERIFY(writeConfig(preset, presetConfig(QStringLiteral("Updated Preset"))));
+    const auto result = TargetRegistry(bundled.path(), active.path()).loadTargets();
+    QVERIFY(result.diagnostics.isEmpty());
+    QCOMPARE(result.targets.size(), 1);
+    QCOMPARE(result.targets.first().displayName(), QStringLiteral("Custom"));
+    QVERIFY(!QFileInfo(custom).isSymLink());
+}
+
+void TargetRegistryTest::disabledSubdirectoryIsIgnored()
+{
+    QTemporaryDir active;
+    const QString disabled = active.filePath(QStringLiteral("disabled"));
+    QVERIFY(QDir().mkpath(disabled));
+    const QString custom = active.filePath(QStringLiteral("raw.json"));
+    QVERIFY(writeConfig(custom, presetConfig()));
+    const QString link = active.filePath(QStringLiteral("catbox.json"));
+    QVERIFY(QFile::link(QDir(bundledTargetsPath()).filePath(QStringLiteral("catbox.json")), link));
+    QVERIFY(QFile::rename(custom, QDir(disabled).filePath(QStringLiteral("raw.json"))));
+    QVERIFY(QFile::rename(link, QDir(disabled).filePath(QStringLiteral("catbox.json"))));
+    const auto result = TargetRegistry(bundledTargetsPath(), active.path()).loadTargets();
+    QVERIFY(result.targets.isEmpty());
+    QVERIFY(result.diagnostics.isEmpty());
+    QVERIFY(QFileInfo::exists(QDir(disabled).filePath(QStringLiteral("raw.json"))));
+}
+
+void TargetRegistryTest::missingPresetsLeaveInitializationRetryable()
+{
+    QTemporaryDir dir;
+    const QString bundled = dir.filePath(QStringLiteral("presets"));
+    const QString active = dir.filePath(QStringLiteral("targets"));
+    TargetRegistry registry(bundled, active);
+    const auto failed = registry.loadTargets();
+    QVERIFY(failed.targets.isEmpty());
+    QCOMPARE(failed.diagnostics.size(), 1);
+    QVERIFY(!QFileInfo::exists(active));
+    QVERIFY(QDir().mkpath(bundled));
+    QVERIFY(writeConfig(QDir(bundled).filePath(QStringLiteral("raw.json")), presetConfig()));
+    const auto retried = registry.loadTargets();
+    QVERIFY(retried.diagnostics.isEmpty());
+    QCOMPARE(retried.targets.size(), 1);
+}
+
+void TargetRegistryTest::invalidActiveDirectoryIsPreserved()
+{
+    QTemporaryDir dir;
+    const QString active = writeTempFile(dir, QStringLiteral("targets"), "keep this file");
+    const auto result = TargetRegistry(bundledTargetsPath(), active).loadTargets();
+    QVERIFY(result.targets.isEmpty());
+    QCOMPARE(result.diagnostics.size(), 1);
+    QFile file(active);
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    QCOMPARE(file.readAll(), QByteArray("keep this file"));
+}
+
+void TargetRegistryTest::brokenLinkProducesDiagnostic()
+{
+    QTemporaryDir active;
+    const QString link = active.filePath(QStringLiteral("missing.json"));
+    QVERIFY(QFile::link(active.filePath(QStringLiteral("no-such-preset")), link));
+    const auto result = TargetRegistry(bundledTargetsPath(), active.path()).loadTargets();
+    QVERIFY(result.targets.isEmpty());
+    QCOMPARE(result.diagnostics.size(), 1);
+    QCOMPARE(result.diagnostics.first().filePath, link);
+    QCOMPARE(result.diagnostics.first().code, QStringLiteral("file.unavailable"));
+    QVERIFY(QFileInfo(link).isSymLink());
+}
+
+void TargetRegistryTest::duplicateIdsProduceDiagnostic()
+{
+    QTemporaryDir active;
+    QVERIFY(writeConfig(active.filePath(QStringLiteral("first.json")), presetConfig(QStringLiteral("First"))));
+    QVERIFY(writeConfig(active.filePath(QStringLiteral("second.json")), presetConfig(QStringLiteral("Second"))));
+    const auto result = TargetRegistry(bundledTargetsPath(), active.path()).loadTargets();
+    QCOMPARE(result.targets.size(), 1);
+    QCOMPARE(result.targets.first().displayName(), QStringLiteral("First"));
+    QCOMPARE(result.diagnostics.size(), 1);
+    QCOMPARE(result.diagnostics.first().code, QStringLiteral("target.duplicate_id"));
 }
 
 void TargetRegistryTest::exampleTargetFilesValidate()
@@ -70,205 +304,6 @@ void TargetRegistryTest::exampleTargetFilesValidate()
                                   return lines.join(QStringLiteral("; "));
                               }()));
     }
-}
-
-void TargetRegistryTest::defaultUserTargetsPathIsStable()
-{
-    TargetRegistry registry;
-    QCOMPARE(registry.userTargetsPath(),
-             QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
-                 + QStringLiteral("/plasma-share-uploader/targets"));
-    QCOMPARE(registry.stateFilePath(),
-             QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
-                 + QStringLiteral("/plasma-share-uploader/state.json"));
-}
-
-void TargetRegistryTest::userTargetsOverrideSystemTargetsById()
-{
-    QTemporaryDir dir;
-    const QString userDir = dir.filePath(QStringLiteral("targets"));
-    QVERIFY(QDir().mkpath(userDir));
-    const QString userPath = userDir + QStringLiteral("/catbox.json");
-    QFile userFile(userPath);
-    QVERIFY(userFile.open(QIODevice::WriteOnly));
-    userFile.write(R"({
-      "id": "catbox",
-      "displayName": "My Catbox",
-      "description": "override",
-      "icon": "image-x-generic",
-      "request": {
-        "url": "https://override.test/upload",
-        "method": "POST",
-        "multipart": {
-          "fields": {},
-          "fileField": "file"
-        }
-      },
-      "response": {
-        "type": "text_url"
-      }
-    })");
-    userFile.close();
-
-    TargetRegistry registry(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../targets"), userDir);
-    const TargetRegistry::LoadResult result = registry.loadTargets();
-
-    QCOMPARE(result.targets.size(), 2);
-    QCOMPARE(result.targets.at(0).id(), QStringLiteral("catbox"));
-    QCOMPARE(result.targets.at(0).displayName(), QStringLiteral("My Catbox"));
-}
-
-void TargetRegistryTest::invalidUserOverrideFallsBackToSystemTarget()
-{
-    QTemporaryDir dir;
-    const QString userDir = dir.filePath(QStringLiteral("targets"));
-    QVERIFY(QDir().mkpath(userDir));
-
-    QFile userFile(userDir + QStringLiteral("/catbox.json"));
-    QVERIFY(userFile.open(QIODevice::WriteOnly));
-    userFile.write(R"({
-      "id": "catbox",
-      "displayName": "Broken Catbox",
-      "request": {
-        "url": "",
-        "method": "POST",
-        "multipart": {
-          "fields": {},
-          "fileField": "file"
-        }
-      },
-      "response": {
-        "type": "text_url"
-      }
-    })");
-    userFile.close();
-
-    TargetRegistry registry(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../targets"), userDir);
-    const TargetRegistry::LoadResult result = registry.loadTargets();
-
-    QCOMPARE(result.targets.size(), 2);
-    QCOMPARE(result.targets.at(0).id(), QStringLiteral("catbox"));
-    QCOMPARE(result.targets.at(0).displayName(), QStringLiteral("Catbox"));
-    QVERIFY(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const TargetDiagnostic &diagnostic) {
-        return diagnostic.filePath.endsWith(QStringLiteral("/catbox.json"))
-            && diagnostic.jsonPath == QLatin1StringView("/request/url")
-            && diagnostic.code == QLatin1StringView("request.url.empty");
-    }));
-}
-
-void TargetRegistryTest::disabledBundledTargetIsSuppressed()
-{
-    QTemporaryDir dir;
-    const QString userDir = dir.filePath(QStringLiteral("targets"));
-    QVERIFY(QDir().mkpath(userDir));
-
-    QFile stateFile(dir.filePath(QStringLiteral("state.json")));
-    QVERIFY(stateFile.open(QIODevice::WriteOnly));
-    stateFile.write(R"({
-      "disabledBundledTargets": ["catbox"]
-    })");
-    stateFile.close();
-
-    TargetRegistry registry(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../targets"),
-                            userDir,
-                            stateFile.fileName());
-    const TargetRegistry::LoadResult result = registry.loadTargets();
-
-    QCOMPARE(result.targets.size(), 1);
-    QCOMPARE(result.targets.at(0).id(), QStringLiteral("uguu"));
-}
-
-void TargetRegistryTest::userOverrideStillWinsWhenBundledTargetIsDisabled()
-{
-    QTemporaryDir dir;
-    const QString userDir = dir.filePath(QStringLiteral("targets"));
-    QVERIFY(QDir().mkpath(userDir));
-
-    QFile stateFile(dir.filePath(QStringLiteral("state.json")));
-    QVERIFY(stateFile.open(QIODevice::WriteOnly));
-    stateFile.write(R"({
-      "disabledBundledTargets": ["catbox"]
-    })");
-    stateFile.close();
-
-    QFile userFile(userDir + QStringLiteral("/catbox.json"));
-    QVERIFY(userFile.open(QIODevice::WriteOnly));
-    userFile.write(R"({
-      "id": "catbox",
-      "displayName": "My Catbox",
-      "description": "override",
-      "icon": "image-x-generic",
-      "request": {
-        "url": "https://override.test/upload",
-        "method": "POST",
-        "multipart": {
-          "fields": {},
-          "fileField": "file"
-        }
-      },
-      "response": {
-        "type": "text_url"
-      }
-    })");
-    userFile.close();
-
-    TargetRegistry registry(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../targets"),
-                            userDir,
-                            stateFile.fileName());
-    const TargetRegistry::LoadResult result = registry.loadTargets();
-
-    QCOMPARE(result.targets.size(), 2);
-    QCOMPARE(result.targets.at(0).id(), QStringLiteral("catbox"));
-    QCOMPARE(result.targets.at(0).displayName(), QStringLiteral("My Catbox"));
-    QVERIFY(!result.targets.at(0).isBundled());
-}
-
-void TargetRegistryTest::disabledBundledTargetStaysSuppressedWhenUserOverrideIsInvalid()
-{
-    QTemporaryDir dir;
-    const QString userDir = dir.filePath(QStringLiteral("targets"));
-    QVERIFY(QDir().mkpath(userDir));
-
-    QFile stateFile(dir.filePath(QStringLiteral("state.json")));
-    QVERIFY(stateFile.open(QIODevice::WriteOnly));
-    stateFile.write(R"({
-      "disabledBundledTargets": ["catbox"]
-    })");
-    stateFile.close();
-
-    QFile userFile(userDir + QStringLiteral("/catbox.json"));
-    QVERIFY(userFile.open(QIODevice::WriteOnly));
-    userFile.write(R"({
-      "id": "catbox",
-      "displayName": "Broken Catbox",
-      "request": {
-        "url": "",
-        "method": "POST",
-        "multipart": {
-          "fields": {},
-          "fileField": "file"
-        }
-      },
-      "response": {
-        "type": "text_url"
-      }
-    })");
-    userFile.close();
-
-    TargetRegistry registry(QStringLiteral(IMSHARE_TEST_SOURCE_DIR) + QStringLiteral("/../targets"),
-                            userDir,
-                            stateFile.fileName());
-    const TargetRegistry::LoadResult result = registry.loadTargets();
-
-    QCOMPARE(result.targets.size(), 1);
-    QCOMPARE(result.targets.at(0).id(), QStringLiteral("uguu"));
-    QVERIFY(std::none_of(result.targets.begin(), result.targets.end(), [](const TargetDefinition &target) {
-        return target.id() == QLatin1StringView("catbox");
-    }));
-    QVERIFY(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const TargetDiagnostic &diagnostic) {
-        return diagnostic.filePath.endsWith(QStringLiteral("/catbox.json"))
-            && diagnostic.code == QLatin1StringView("request.url.empty");
-    }));
 }
 
 void TargetRegistryTest::invalidTargetsProduceErrorsButDoNotBlockValidTargets()
@@ -318,7 +353,7 @@ void TargetRegistryTest::invalidTargetsProduceErrorsButDoNotBlockValidTargets()
     const TargetRegistry::LoadResult result = registry.loadTargets();
 
     QVERIFY(!result.diagnostics.isEmpty());
-    QCOMPARE(result.targets.size(), 3);
+    QCOMPARE(result.targets.size(), 1);
     QVERIFY(std::any_of(result.targets.begin(), result.targets.end(), [](const TargetDefinition &target) {
         return target.id() == QLatin1StringView("good");
     }));

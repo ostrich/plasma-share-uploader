@@ -4,31 +4,14 @@
 
 #include <QDir>
 #include <QFile>
-#include <QJsonArray>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMap>
-#include <QSet>
 #include <QStandardPaths>
+#include <QTemporaryDir>
 
 namespace {
-QString defaultSystemTargetsPath()
-{
-    return QStringLiteral(PLASMA_SHARE_UPLOADER_SYSTEM_TARGETS_PATH);
-}
-
-QString defaultUserTargetsPath()
-{
-    return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
-        + QStringLiteral("/plasma-share-uploader/targets");
-}
-
-QString defaultStateFilePath()
-{
-    return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
-        + QStringLiteral("/plasma-share-uploader/state.json");
-}
-
 void appendRegistryDiagnostic(QList<TargetDiagnostic> &diagnostics,
                               const QString &filePath,
                               const QString &jsonPath,
@@ -38,11 +21,69 @@ void appendRegistryDiagnostic(QList<TargetDiagnostic> &diagnostics,
     diagnostics.append(TargetDiagnostic{TargetDiagnosticSeverity::Error, filePath, jsonPath, code, message});
 }
 
-void loadTargetFile(const QString &path,
-                    TargetDefinition::Source source,
-                    QMap<QString, TargetDefinition> &targets,
-                    QList<TargetDiagnostic> &diagnostics)
+bool initializeActiveTargets(const QString &bundledPath, const QString &activePath,
+                             QList<TargetDiagnostic> &diagnostics)
 {
+    const QFileInfo activeInfo(activePath);
+    // An existing directory, even an empty one, is the user's complete selection.
+    // Also leave invalid paths untouched so the loader can diagnose them.
+    if (activeInfo.exists() || activeInfo.isSymLink()) {
+        return true;
+    }
+
+    const QDir bundledDir(bundledPath);
+    if (!bundledDir.exists() || !bundledDir.isReadable()) {
+        appendRegistryDiagnostic(diagnostics, bundledPath, {}, QStringLiteral("directory.unavailable"),
+                                 QStringLiteral("Cannot read bundled presets to initialize upload targets"));
+        return false;
+    }
+
+    const QString parentPath = activeInfo.absolutePath();
+    if (!QDir().mkpath(parentPath)) {
+        appendRegistryDiagnostic(diagnostics, parentPath, {}, QStringLiteral("directory.create_failed"),
+                                 QStringLiteral("Failed to create upload configuration directory"));
+        return false;
+    }
+
+    // Publish all default links together; failed initialization can be retried.
+    QTemporaryDir pending(QDir(parentPath).filePath(QStringLiteral(".targets-XXXXXX")));
+    if (!pending.isValid()) {
+        appendRegistryDiagnostic(diagnostics, activePath, {}, QStringLiteral("directory.create_failed"),
+                                 QStringLiteral("Failed to prepare upload targets directory"));
+        return false;
+    }
+    const auto presets = bundledDir.entryInfoList({QStringLiteral("*.json")}, QDir::Files, QDir::Name);
+    for (const QFileInfo &preset : presets) {
+        if (!QFile::link(preset.absoluteFilePath(), pending.filePath(preset.fileName()))) {
+            appendRegistryDiagnostic(diagnostics, preset.absoluteFilePath(), {}, QStringLiteral("preset.link_failed"),
+                                     QStringLiteral("Failed to enable bundled preset"));
+            return false;
+        }
+    }
+
+    if (!QDir().rename(pending.path(), activeInfo.absoluteFilePath())) {
+        // Another host application may have initialized the directory first.
+        if (QFileInfo(activePath).isDir()) {
+            return true;
+        }
+        appendRegistryDiagnostic(diagnostics, activePath, {}, QStringLiteral("directory.create_failed"),
+                                 QStringLiteral("Failed to create upload targets directory"));
+        return false;
+    }
+    pending.setAutoRemove(false);
+    return true;
+}
+
+void loadTargetFile(const QString &path, QMap<QString, TargetDefinition> &targets,
+                    QMap<QString, QString> &targetPaths, QList<TargetDiagnostic> &diagnostics)
+{
+    const QFileInfo info(path);
+    if (!info.isFile()) {
+        appendRegistryDiagnostic(diagnostics, path, {}, QStringLiteral("file.unavailable"),
+                                 info.isSymLink() ? QStringLiteral("Target link does not point to an existing file")
+                                                  : QStringLiteral("Target configuration is not a regular file"));
+        return;
+    }
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
         appendRegistryDiagnostic(diagnostics, path, {}, QStringLiteral("file.open_failed"), QStringLiteral("Failed to open target file"));
@@ -55,123 +96,62 @@ void loadTargetFile(const QString &path,
         return;
     }
 
-    const QJsonObject targetObject = doc.object();
     TargetDefinition definition;
     QList<TargetDiagnostic> fileDiagnostics;
-    if (!TargetConfigParser::parse(targetObject, &definition.target, &fileDiagnostics)) {
+    if (!TargetConfigParser::parse(doc.object(), &definition.target, &fileDiagnostics)) {
         for (TargetDiagnostic &diagnostic : fileDiagnostics) {
             diagnostic.filePath = path;
             diagnostics.append(diagnostic);
         }
         return;
     }
-    definition.source = source;
-    targets.insert(definition.id(), definition);
-}
-
-void loadTargetsFromDirectory(const QString &path,
-                              bool required,
-                              TargetDefinition::Source source,
-                              QMap<QString, TargetDefinition> &targets,
-                              QList<TargetDiagnostic> &diagnostics)
-{
-    const QDir dir(path);
-    if (!dir.exists()) {
-        if (required) {
-            appendRegistryDiagnostic(diagnostics, path, {}, QStringLiteral("directory.missing"), QStringLiteral("Missing targets directory"));
-        }
+    if (targetPaths.contains(definition.id())) {
+        appendRegistryDiagnostic(diagnostics, path, QStringLiteral("/id"), QStringLiteral("target.duplicate_id"),
+                                 QStringLiteral("Target '%1' is already defined by %2").arg(definition.id(), targetPaths.value(definition.id())));
         return;
     }
-
-    const QStringList fileNames = dir.entryList(QStringList{QStringLiteral("*.json")}, QDir::Files, QDir::Name);
-    for (const QString &fileName : fileNames) {
-        loadTargetFile(dir.filePath(fileName), source, targets, diagnostics);
-    }
-}
-
-QSet<QString> loadDisabledBundledTargetIds(const QString &path, QList<TargetDiagnostic> &diagnostics)
-{
-    QSet<QString> disabledIds;
-    QFile file(path);
-    if (!file.exists()) {
-        return disabledIds;
-    }
-
-    if (!file.open(QIODevice::ReadOnly)) {
-        appendRegistryDiagnostic(diagnostics, path, QStringLiteral("/disabledBundledTargets"),
-                                 QStringLiteral("state.open_failed"),
-                                 QStringLiteral("Failed to open state file"));
-        return disabledIds;
-    }
-
-    const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-    if (!doc.isObject()) {
-        appendRegistryDiagnostic(diagnostics, path, QStringLiteral("/disabledBundledTargets"),
-                                 QStringLiteral("state.invalid_json_object"),
-                                 QStringLiteral("State file is not a JSON object"));
-        return disabledIds;
-    }
-
-    const QJsonValue disabledValue = doc.object().value(QStringLiteral("disabledBundledTargets"));
-    if (disabledValue.isUndefined()) {
-        return disabledIds;
-    }
-    if (!disabledValue.isArray()) {
-        appendRegistryDiagnostic(diagnostics, path, QStringLiteral("/disabledBundledTargets"),
-                                 QStringLiteral("state.disabledBundledTargets.not_array"),
-                                 QStringLiteral("disabledBundledTargets must be an array"));
-        return disabledIds;
-    }
-
-    const QJsonArray disabledArray = disabledValue.toArray();
-    for (int i = 0; i < disabledArray.size(); ++i) {
-        const QJsonValue item = disabledArray.at(i);
-        if (!item.isString() || item.toString().isEmpty()) {
-            appendRegistryDiagnostic(diagnostics, path,
-                                     QStringLiteral("/disabledBundledTargets/%1").arg(i),
-                                     QStringLiteral("state.disabledBundledTargets.item.invalid"),
-                                     QStringLiteral("disabledBundledTargets entries must be non-empty strings"));
-            continue;
-        }
-        disabledIds.insert(item.toString());
-    }
-
-    return disabledIds;
+    targetPaths.insert(definition.id(), path);
+    targets.insert(definition.id(), definition);
 }
 }
 
-TargetRegistry::TargetRegistry(QString systemPath, QString userPath, QString statePath)
-    : m_systemPath(std::move(systemPath))
-    , m_userPath(std::move(userPath))
-    , m_statePath(std::move(statePath))
+TargetRegistry::TargetRegistry(QString bundledPath, QString activePath)
+    : m_bundledPath(std::move(bundledPath))
+    , m_activePath(std::move(activePath))
 {
 }
 
 TargetRegistry::LoadResult TargetRegistry::loadTargets() const
 {
     LoadResult result;
-    QMap<QString, TargetDefinition> mergedTargets;
-    const QSet<QString> disabledBundledTargetIds = loadDisabledBundledTargetIds(stateFilePath(), result.diagnostics);
-
-    loadTargetsFromDirectory(systemTargetsPath(), true, TargetDefinition::Source::System, mergedTargets, result.diagnostics);
-    loadTargetsFromDirectory(userTargetsPath(), false, TargetDefinition::Source::User, mergedTargets, result.diagnostics);
-
-    for (auto it = mergedTargets.begin(); it != mergedTargets.end();) {
-        if (it->isBundled() && disabledBundledTargetIds.contains(it.key())) {
-            it = mergedTargets.erase(it);
-            continue;
-        }
-        ++it;
+    const QString activePath = activeTargetsPath();
+    if (!initializeActiveTargets(bundledTargetsPath(), activePath, result.diagnostics)) {
+        return result;
+    }
+    const QDir activeDir(activePath);
+    if (!activeDir.exists() || !activeDir.isReadable()) {
+        appendRegistryDiagnostic(result.diagnostics, activePath, {}, QStringLiteral("directory.unavailable"),
+                                 QStringLiteral("Cannot read active upload targets directory"));
+        return result;
     }
 
-    result.targets = mergedTargets.values();
+    QMap<QString, TargetDefinition> targets;
+    QMap<QString, QString> targetPaths;
+    // System includes broken symlinks so they produce a diagnostic instead of disappearing.
+    const auto entries = activeDir.entryInfoList({QStringLiteral("*.json")}, QDir::Files | QDir::System, QDir::Name);
+    for (const QFileInfo &entry : entries) {
+        if (!entry.isDir()) {
+            loadTargetFile(entry.absoluteFilePath(), targets, targetPaths, result.diagnostics);
+        }
+    }
+    result.targets = targets.values();
     return result;
 }
 
-QString TargetRegistry::systemTargetsPath() const
+QString TargetRegistry::bundledTargetsPath() const
 {
-    if (!m_systemPath.isEmpty()) {
-        return m_systemPath;
+    if (!m_bundledPath.isEmpty()) {
+        return m_bundledPath;
     }
 
 #ifdef PLASMA_SHARE_UPLOADER_DEV_TARGETS_PATH
@@ -181,15 +161,12 @@ QString TargetRegistry::systemTargetsPath() const
     }
 #endif
 
-    return defaultSystemTargetsPath();
+    return QStringLiteral(PLASMA_SHARE_UPLOADER_SYSTEM_TARGETS_PATH);
 }
 
-QString TargetRegistry::userTargetsPath() const
+QString TargetRegistry::activeTargetsPath() const
 {
-    return m_userPath.isEmpty() ? defaultUserTargetsPath() : m_userPath;
-}
-
-QString TargetRegistry::stateFilePath() const
-{
-    return m_statePath.isEmpty() ? defaultStateFilePath() : m_statePath;
+    return m_activePath.isEmpty()
+        ? QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + QStringLiteral("/plasma-share-uploader/targets")
+        : m_activePath;
 }

@@ -217,8 +217,6 @@ QString ShareJob::stageInputFiles()
 void ShareJob::selectTarget()
 {
     TargetRegistry registry;
-    const QString systemTargetsPath = registry.systemTargetsPath();
-    const QString userTargetsPath = registry.userTargetsPath();
     const TargetRegistry::LoadResult loadResult = registry.loadTargets();
     const QList<TargetDefinition> compatibleTargets = ConstraintMatcher::filterTargets(loadResult.targets, m_files);
 
@@ -230,7 +228,7 @@ void ShareJob::selectTarget()
     }
 
     QWidget *parentWidget = QApplication::activeWindow();
-    m_picker = new TargetPickerDialog(compatibleTargets, loadResult.diagnostics, systemTargetsPath, userTargetsPath, parentWidget);
+    m_picker = new TargetPickerDialog(compatibleTargets, loadResult.diagnostics, parentWidget);
     connect(m_picker, &QDialog::finished, this, [this](int result) {
         const TargetDefinition selectedTarget = m_picker->selectedTarget();
         m_picker->deleteLater();

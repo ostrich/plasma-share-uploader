@@ -26,13 +26,16 @@ private slots:
 void RuntimePluginTest::controllerLifecycle_data()
 {
     QTest::addColumn<bool>("cancelPicker");
-    QTest::newRow("cancel") << true;
-    QTest::newRow("upload") << false;
+    QTest::addColumn<bool>("linkedPreset");
+    QTest::newRow("cancel") << true << false;
+    QTest::newRow("upload") << false << false;
+    QTest::newRow("upload-preset-link") << false << true;
 }
 
 void RuntimePluginTest::controllerLifecycle()
 {
     QFETCH(bool, cancelPicker);
+    QFETCH(bool, linkedPreset);
     HttpCaptureServer server;
     QVERIFY(server.start());
     server.enqueueResponse({200, "OK", "text/plain", {}, "https://files.example/plugin"});
@@ -44,14 +47,16 @@ void RuntimePluginTest::controllerLifecycle()
     const QString configRoot = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
         + QStringLiteral("/plasma-share-uploader");
     QVERIFY(QDir().mkpath(configRoot + QStringLiteral("/targets")));
-    QFile target(configRoot + QStringLiteral("/targets/raw.json"));
+    const QString activeFile = configRoot + QStringLiteral("/targets/raw.json");
+    QFile::remove(activeFile);
+    const QString presetFile = dir.filePath(QStringLiteral("preset.json"));
+    QFile target(linkedPreset ? presetFile : activeFile);
     QVERIFY(target.open(QIODevice::WriteOnly));
     target.write(QJsonDocument(config).toJson());
     target.close();
-    QFile state(configRoot + QStringLiteral("/state.json"));
-    QVERIFY(state.open(QIODevice::WriteOnly));
-    state.write(R"({"disabledBundledTargets":["catbox","uguu"]})");
-    state.close();
+    if (linkedPreset) {
+        QVERIFY(QFile::link(presetFile, activeFile));
+    }
 
     Purpose::AlternativesModel model;
     model.setPluginType(QStringLiteral("ShareUrl"));
