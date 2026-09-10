@@ -26,6 +26,10 @@
   ],
   "response": {
     "type": "json_pointer",
-    "pointer": "/files/0/url"
+    "pointer": "/files/0/url",
+    "error": {
+      "type": "json_pointer",
+      "pointer": "/description"
+    }
   }
 }

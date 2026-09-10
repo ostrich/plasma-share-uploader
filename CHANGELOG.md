@@ -2,6 +2,14 @@
 
 ## 0.3.0
 
+### Target API corrections
+
+Pomf and Uguu now extract server error messages from `/description`. The target
+configs were checked against service documentation and upstream implementations;
+see [target API verification](docs/target-api-verification.md) for sources and
+setup requirements. Current vgy.me compatibility remains unverified because its
+documentation was inaccessible.
+
 ### Active target directory
 
 Enabled upload targets now come exclusively from

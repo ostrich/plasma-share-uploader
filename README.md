@@ -67,6 +67,8 @@ Packaged presets live under
 `${CMAKE_INSTALL_PREFIX}/share/plasma-share-uploader/targets/` (normally `/usr/share/...`).
 Their filenames stay stable across releases so enabled links continue to work.
 The `examples/` subdirectory contains templates that need configuration before use.
+See [target API verification](docs/target-api-verification.md) for their upstream
+references, setup requirements, and verification limits.
 
 For example, enable Catbox with:
 

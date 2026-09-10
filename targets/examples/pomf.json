@@ -17,7 +17,7 @@
     "pointer": "/files/0/url",
     "error": {
       "type": "json_pointer",
-      "pointer": "/error"
+      "pointer": "/description"
     }
   }
 }
