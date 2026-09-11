@@ -30,6 +30,16 @@ target_link_libraries(runtimeuploadplugin PRIVATE imshare_runtime)
 add_subdirectory(ShareUploader)
 target_link_libraries(imshare_runtime PUBLIC imshare_ui imshare_uiplugin)
 qt_add_executable(plasma-share-uploader-config targetmanagerapp.cpp)
+# Some shared-Qt Kirigami packages advertise plugin link targets that they do
+# not export. In that case Kirigami is loaded dynamically from the system QML
+# path, so skip Qt's import scan. This also disables QML deployment scanning;
+# our packages rely on system-installed QML modules. Revisit this if bundling
+# Qt dependencies. Preserve scanning for static Qt and packages with valid
+# plugin targets.
+if(QT6_IS_SHARED_LIBS_BUILD AND NOT TARGET KF6Kirigamiplugin)
+    set_property(TARGET plasma-share-uploader-config
+        PROPERTY QT_QML_MODULE_NO_IMPORT_SCAN TRUE)
+endif()
 qt_add_resources(plasma-share-uploader-config manager_style PREFIX "/" FILES qtquickcontrols2.conf)
 target_link_libraries(plasma-share-uploader-config PRIVATE imshare_ui imshare_uiplugin)
 install(TARGETS plasma-share-uploader-config DESTINATION ${KDE_INSTALL_BINDIR})
