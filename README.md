@@ -45,7 +45,7 @@ Qt Declarative and Quick Controls), and KDE Frameworks 6 Purpose, CoreAddons,
 Notifications, Wallet, and Kirigami. Install KDE's QQC2 desktop style for the UI.
 
 The bundled targets also use `exiv2` to strip metadata from temporary copies of
-JPEG/TIFF files. Install it or remove those rules in the **Before Upload** tab.
+JPEG/TIFF/WebP files. Install it or remove those rules in the **Before Upload** tab.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF

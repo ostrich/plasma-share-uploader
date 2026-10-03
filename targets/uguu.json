@@ -17,7 +17,8 @@
     {
       "mime": [
         "image/jpeg",
-        "image/tiff"
+        "image/tiff",
+        "image/webp"
       ],
       "fileHandling": "inplace_copy",
       "commands": [
