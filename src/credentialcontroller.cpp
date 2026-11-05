@@ -44,13 +44,16 @@ QString CredentialController::suggestedKey() const
 void CredentialController::reset()
 {
     ++m_generation;
+    m_operation = Operation::Idle;
+    if (m_context) m_context->deleteLater();
+    m_context.clear();
     m_message.clear();
     emit resetRequested();
     emit changed();
 }
 void CredentialController::check()
 {
-    if (m_busy)
+    if (busy())
         return;
     ParsedTargetConfig parsed;
     if (!m_draft->problems().isEmpty() || !TargetConfigParser::parse(m_draft->document(), &parsed)) {
@@ -64,13 +67,13 @@ void CredentialController::check()
         emit changed();
         return;
     }
-    const auto revision = m_draft->revision(), generation = m_generation;
-    m_busy = true;
-    emit changed();
-    m_store->read(CredentialStore::walletKeys(parsed.request), this,
+    const auto revision = m_draft->revision();
+    const auto generation = begin(Operation::Checking);
+    if (!current(generation)) return;
+    m_store->read(CredentialStore::walletKeys(parsed.request), m_context,
         [this, revision, generation](CredentialStore::Values, const QString& error) {
-            m_busy = false;
-            if (generation == m_generation)
+            if (!finish(generation)) return;
+            if (current(generation))
                 m_message = revision != m_draft->revision() ? tr("The draft changed; check its credentials again.")
                     : error.isEmpty() ? tr("Referenced credentials are available. No upload performed.")
                                       : error;
@@ -80,7 +83,7 @@ void CredentialController::check()
 void CredentialController::bind(int mode, int location, const QString& field, const QString& key, const QString& secret,
     const QString& username, bool saveSecret)
 {
-    if (m_busy || !m_draft->editable() || !m_draft->hasObject())
+    if (busy() || !m_draft->editable() || !m_draft->hasObject())
         return;
     if (m_draft->hasFormErrors()) {
         m_message = tr("Repair incomplete table or JSON body edits before binding credentials.");
@@ -119,52 +122,49 @@ void CredentialController::bind(int mode, int location, const QString& field, co
         reference.prepend(QStringLiteral("Basic "));
         value = QString::fromLatin1((username + QLatin1Char(':') + secret).toUtf8().toBase64());
     }
-    const auto revision = m_draft->revision(), generation = m_generation;
-    m_busy = true;
-    emit changed();
+    const auto revision = m_draft->revision();
+    const auto generation = begin(Operation::Binding);
+    if (!current(generation)) return;
     auto apply = [this, revision, generation, path, reference](const QString& error) {
-        m_busy = false;
-        if (generation != m_generation) {
-            emit changed();
-            return;
-        }
+        if (!finish(generation)) return;
         if (!error.isEmpty()) {
             m_message = error;
             emit changed();
             return;
         }
         emit clearSecret();
+        if (!current(generation)) return;
         if (revision != m_draft->revision())
             m_message = tr(
                 "Credential ready, but the draft changed. Use existing credential to bind it to the intended target.");
         else {
             m_draft->setField(path, reference);
+            if (!current(generation)) return;
             m_message = tr("Credential reference added to the draft. Save the target to apply it.");
         }
         emit changed();
     };
     if (saveSecret)
-        m_store->write(key, value, this, apply);
+        m_store->write(key, value, m_context, apply);
     else
-        m_store->read({ key }, this, [apply](CredentialStore::Values, const QString& error) { apply(error); });
+        m_store->read({ key }, m_context, [apply](CredentialStore::Values, const QString& error) { apply(error); });
 }
 void CredentialController::remove(const QString& key)
 {
-    if (m_busy || !m_draft->editable() || !CredentialStore::validKey(key))
+    if (busy() || !m_draft->editable() || !CredentialStore::validKey(key))
         return;
-    const auto generation = m_generation;
-    m_busy = true;
-    emit changed();
-    m_store->remove(key, this, [this, generation](const QString& error) {
-        m_busy = false;
-        if (generation == m_generation)
+    const auto generation = begin(Operation::Removing);
+    if (!current(generation)) return;
+    m_store->remove(key, m_context, [this, generation](const QString& error) {
+        if (!finish(generation)) return;
+        if (current(generation))
             m_message = error.isEmpty() ? tr("Credential deleted. References in targets are retained.") : error;
         emit changed();
     });
 }
 void CredentialController::removeBinding(int mode, int location, const QString& field)
 {
-    if (m_busy || !m_draft->editable() || !m_draft->hasObject())
+    if (busy() || !m_draft->editable() || !m_draft->hasObject())
         return;
     if (m_draft->hasFormErrors()) {
         m_message = tr("Repair incomplete table or JSON body edits before removing a request field.");
@@ -177,4 +177,22 @@ void CredentialController::removeBinding(int mode, int location, const QString& 
     m_draft->removeField(path);
     m_message = tr("Request field removed from the draft. The stored credential is retained.");
     emit changed();
+}
+
+quint64 CredentialController::begin(Operation operation)
+{
+    const auto generation = ++m_generation;
+    m_operation = operation;
+    m_context = new QObject(this);
+    emit changed();
+    return generation;
+}
+
+bool CredentialController::finish(quint64 generation)
+{
+    if (!current(generation) || !busy()) return false;
+    m_operation = Operation::Idle;
+    if (m_context) m_context->deleteLater();
+    m_context.clear();
+    return true;
 }

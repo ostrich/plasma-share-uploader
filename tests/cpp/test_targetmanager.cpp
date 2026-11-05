@@ -41,6 +41,16 @@ public:
     }
 };
 
+// Deliberately deliver callbacks even after their context was retired.
+class DeferredCredentials final : public CredentialStore {
+public:
+    QList<ReadCallback> reads;
+    QList<WriteCallback> writes;
+    void read(const QStringList&, QObject*, ReadCallback callback) override { reads.append(std::move(callback)); }
+    void write(const QString&, const QString&, QObject*, WriteCallback callback) override { writes.append(std::move(callback)); }
+    void remove(const QString&, QObject*, WriteCallback callback) override { writes.append(std::move(callback)); }
+};
+
 namespace {
 QJsonObject target(const QUrl& url = QUrl(QStringLiteral("https://example.invalid/upload")))
 {
@@ -88,6 +98,13 @@ private slots:
     void invalidDefinitionsDoNotBlockValidTargets();
     void listResetExposesOldDataBeforeReplacement();
     void managerPresetAndDraftActions();
+    void runnerReplacementSurvivesSignals_data();
+    void runnerReplacementSurvivesSignals();
+    void runnerIgnoresRetiredCredentialCallbacks();
+    void credentialResetRetiresOperations();
+    void exportCancellationRetiresSnapshot();
+    void resettingPreviewRemovesOwnedFiles_data();
+    void resettingPreviewRemovesOwnedFiles();
 };
 
 void TargetManagerTest::presetLifecycleUsesFilesAndNeverWritesThroughLinks()
@@ -711,16 +728,179 @@ void TargetManagerTest::managerPresetAndDraftActions()
     const auto saved = manager.selectedPath();
     QVERIFY(QFileInfo(saved).isFile());
     QSignalSpy fileDialog(&manager, &TargetManagerController::fileDialogRequested);
+    manager.request(QStringLiteral("export"));
     manager.acceptExport(ConfigJson::text(manager.draft()->document()));
     QCOMPARE(fileDialog.size(), 1);
     const QUrl destination(fileDialog.first().at(1).toString());
     QVERIFY(destination.isLocalFile());
     QVERIFY(QFileInfo(destination.toLocalFile()).absolutePath() != QLatin1StringView("/"));
+    manager.cancelExport();
     manager.draft()->setRawText(QStringLiteral("{broken"));
     QVERIFY(manager.save()); // Disabled malformed drafts stay repairable.
     manager.request(QStringLiteral("toggle"));
     QCOMPARE(manager.selectedPath(), saved);
     QVERIFY(QFileInfo(saved).exists());
+}
+
+void TargetManagerTest::runnerReplacementSurvivesSignals_data()
+{
+    QTest::addColumn<QString>("stage");
+    for (const auto& stage : { "busy", "credentials", "preparing", "prepared", "preview", "completed" })
+        QTest::newRow(stage) << QString::fromLatin1(stage);
+}
+
+void TargetManagerTest::runnerReplacementSurvivesSignals()
+{
+    QFETCH(QString, stage);
+    HttpCaptureServer server;
+    QVERIFY(server.start());
+    server.enqueueResponse({ 200, "OK", "text/plain", {}, QByteArray("https://example.test/result") });
+    MemoryCredentials credentials;
+    UploadTestRunner runner(nullptr, &credentials);
+    QSignalSpy previews(&runner, &UploadTestRunner::previewReady);
+    QSignalSpy completed(&runner, &UploadTestRunner::completed);
+    bool replaced = false;
+    auto replace = [&]() {
+        if (replaced) return;
+        replaced = true;
+        runner.cancel();
+        runner.start(target(server.url()), {}, true);
+    };
+    connect(&runner, &UploadTestRunner::busyChanged, &runner, [&](bool busy) {
+        if (busy && stage == QLatin1StringView("busy")) replace();
+    });
+    connect(&runner, &UploadTestRunner::message, &runner, [&](const QString& text) {
+        if ((stage == QLatin1StringView("credentials") && text.startsWith(QLatin1StringView("Resolving")))
+            || (stage == QLatin1StringView("preparing") && text.startsWith(QLatin1StringView("Preparing")))
+            || (stage == QLatin1StringView("prepared") && text.startsWith(QLatin1StringView("Prepared")))) replace();
+    });
+    connect(&runner, &UploadTestRunner::previewReady, &runner, [&](const QString&) {
+        if (stage == QLatin1StringView("preview")) replace();
+    });
+    connect(&runner, &UploadTestRunner::completed, &runner, [&](const UploadResult&) {
+        if (stage == QLatin1StringView("completed")) replace();
+    });
+    runner.start(target(server.url()), {}, stage == QLatin1StringView("preview"));
+    QTRY_VERIFY(replaced);
+    QTRY_VERIFY(!runner.busy());
+    QCOMPARE(previews.size(), stage == QLatin1StringView("preview") ? 2 : 1);
+    QCOMPARE(completed.size(), stage == QLatin1StringView("completed") ? 1 : 0);
+    QCOMPARE(server.requests().size(), stage == QLatin1StringView("completed") ? 1 : 0);
+    QVERIFY(QFileInfo::exists(runner.previewPath()));
+}
+
+void TargetManagerTest::runnerIgnoresRetiredCredentialCallbacks()
+{
+    DeferredCredentials credentials;
+    UploadTestRunner runner(nullptr, &credentials);
+    QSignalSpy previews(&runner, &UploadTestRunner::previewReady);
+    runner.start(target(), {}, false);
+    QCOMPARE(credentials.reads.size(), 1);
+    runner.cancel();
+    runner.start(target(), {}, false);
+    QCOMPARE(credentials.reads.size(), 2);
+    credentials.reads.at(0)({}, QStringLiteral("obsolete failure"));
+    QVERIFY(runner.busy());
+    credentials.reads.at(1)({}, QStringLiteral("current failure"));
+    QVERIFY(!runner.busy());
+    QCOMPARE(previews.size(), 0);
+}
+
+void TargetManagerTest::credentialResetRetiresOperations()
+{
+    DeferredCredentials credentials;
+    TargetDraft draft;
+    draft.load(QJsonDocument(target()).toJson());
+    CredentialController panel(&draft, &credentials);
+    panel.check();
+    QVERIFY(panel.busy());
+    panel.reset();
+    QVERIFY(!panel.busy());
+    panel.check();
+    credentials.reads.at(0)({}, QStringLiteral("obsolete"));
+    QVERIFY(panel.busy());
+    QVERIFY(panel.message().isEmpty());
+    credentials.reads.at(1)({}, {});
+    QVERIFY(!panel.busy());
+    panel.bind(1, 0, {}, QStringLiteral("demo"), QStringLiteral("secret"), {}, true);
+    panel.reset();
+    panel.remove(QStringLiteral("demo"));
+    credentials.writes.at(0)({});
+    QVERIFY(panel.busy());
+    QVERIFY(!draft.bytes().contains("WALLET:demo"));
+    credentials.writes.at(1)({});
+    QVERIFY(!panel.busy());
+    QVERIFY(panel.message().contains(QStringLiteral("deleted")));
+}
+
+void TargetManagerTest::exportCancellationRetiresSnapshot()
+{
+    QTemporaryDir active, presets, transfer;
+    writeBytes(active.filePath(QStringLiteral("raw.json")), QJsonDocument(target()).toJson());
+    TargetManagerController manager(presets.path(), active.path());
+    QSignalSpy review(&manager, &TargetManagerController::exportReviewRequested);
+    const auto destination = QUrl::fromLocalFile(transfer.filePath(QStringLiteral("out.json")));
+    manager.request(QStringLiteral("export"));
+    manager.cancelExport();
+    manager.acceptExport(review.last().first().toString());
+    manager.exportFile(destination);
+    QVERIFY(!QFileInfo::exists(destination.toLocalFile()));
+    manager.request(QStringLiteral("export"));
+    manager.acceptExport(review.last().first().toString());
+    manager.request(QStringLiteral("new")); // Selection stays fixed while the chooser owns the snapshot.
+    QVERIFY(!manager.dirty());
+    manager.cancelExport();
+    manager.exportFile(destination);
+    QVERIFY(!QFileInfo::exists(destination.toLocalFile()));
+    manager.request(QStringLiteral("export"));
+    manager.acceptExport(review.last().first().toString());
+    manager.exportFile(QUrl::fromLocalFile(active.filePath(QStringLiteral("blocked.json"))));
+    manager.exportFile(destination); // A failed write attempt cannot replay the old snapshot.
+    QVERIFY(!QFileInfo::exists(destination.toLocalFile()));
+    manager.request(QStringLiteral("export"));
+    manager.acceptExport(review.last().first().toString());
+    manager.exportFile(destination);
+    QVERIFY(QFileInfo::exists(destination.toLocalFile()));
+}
+
+void TargetManagerTest::resettingPreviewRemovesOwnedFiles_data()
+{
+    QTest::addColumn<bool>("preprocess");
+    QTest::newRow("staged") << false;
+    QTest::newRow("processed") << true;
+}
+
+void TargetManagerTest::resettingPreviewRemovesOwnedFiles()
+{
+    QFETCH(bool, preprocess);
+    QTemporaryDir files;
+    const auto source = writeTempFile(files, QStringLiteral("sample.txt"), QByteArray("original"));
+    auto object = target();
+    if (preprocess) {
+        object.insert(QStringLiteral("preUpload"), QJsonArray { QJsonObject {
+            { QStringLiteral("mime"), QJsonArray { QStringLiteral("*/*") } },
+            { QStringLiteral("fileHandling"), QStringLiteral("inplace_copy") },
+            { QStringLiteral("commands"), QJsonArray { commandObject({ pythonExecutable(),
+                fixtureScriptPath(QStringLiteral("append_text.py")), QStringLiteral("${FILE}"), QStringLiteral("prepared") }) } }
+        } });
+    }
+    TargetDraft draft;
+    draft.load(QJsonDocument(object).toJson());
+    MemoryCredentials credentials;
+    TestController controller(&draft, &credentials);
+    controller.setFile(source);
+    controller.start(true);
+    QTRY_VERIFY(!controller.busy());
+    const auto first = controller.preview();
+    QVERIFY(QFileInfo::exists(first));
+    controller.start(true);
+    QVERIFY(!QFileInfo::exists(first));
+    QTRY_VERIFY(!controller.busy());
+    const auto second = controller.preview();
+    QVERIFY(QFileInfo::exists(second));
+    controller.reset();
+    QVERIFY(controller.preview().isEmpty());
+    QVERIFY(!QFileInfo::exists(second));
 }
 
 QTEST_MAIN(TargetManagerTest)

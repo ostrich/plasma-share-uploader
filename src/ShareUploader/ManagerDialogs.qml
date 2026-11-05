@@ -136,6 +136,7 @@ Item {
         width: Math.min(800, Overlay.overlay.width - 40)
 
         onAccepted: root.controller.acceptExport(exportText.text)
+        onRejected: root.controller.cancelExport()
 
         ColumnLayout {
             anchors.fill: parent
@@ -179,5 +180,6 @@ Item {
         title: qsTr("Export target JSON")
 
         onAccepted: root.controller.exportFile(selectedFile)
+        onRejected: root.controller.cancelExport()
     }
 }

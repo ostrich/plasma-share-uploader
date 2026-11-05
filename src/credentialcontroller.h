@@ -1,6 +1,7 @@
 #pragma once
 #include "credentialstore.h"
 #include "targetdraft.h"
+#include <QPointer>
 
 class CredentialController : public QObject {
     Q_OBJECT
@@ -12,7 +13,7 @@ class CredentialController : public QObject {
     Q_PROPERTY(QString suggestedKey READ suggestedKey NOTIFY resetRequested)
 public:
     CredentialController(TargetDraft* draft, CredentialStore* store, QObject* parent = nullptr);
-    bool busy() const { return m_busy; }
+    bool busy() const { return m_operation != Operation::Idle; }
     QString message() const { return m_message; }
     QStringList references() const;
     QString suggestedKey() const;
@@ -31,6 +32,11 @@ private:
     TargetDraft* m_draft;
     CredentialStore* m_store;
     QString m_message;
-    bool m_busy = false;
+    enum class Operation { Idle, Checking, Binding, Removing };
+    Operation m_operation = Operation::Idle;
+    QPointer<QObject> m_context;
+    quint64 begin(Operation operation);
+    bool current(quint64 generation) const { return generation == m_generation; }
+    bool finish(quint64 generation);
     quint64 m_generation = 0;
 };

@@ -49,6 +49,7 @@ public:
     Q_INVOKABLE void confirm(bool accepted);
     Q_INVOKABLE bool save();
     Q_INVOKABLE void importFile(const QUrl& url);
+    Q_INVOKABLE void cancelExport();
     Q_INVOKABLE void acceptExport(const QString& text);
     Q_INVOKABLE void exportFile(const QUrl& url);
 signals:
@@ -82,6 +83,8 @@ private:
     QList<TargetFileStore::Entry> m_entries;
     TargetFileStore::Entry m_entry;
     QString m_search, m_notice, m_message;
+    enum class ExportPhase { Idle, Reviewing, ChoosingDestination };
+    ExportPhase m_exportPhase = ExportPhase::Idle;
     QByteArray m_export;
     int m_filter = 0;
     // Editing and modal action resolution are independent state machines.

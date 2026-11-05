@@ -13,15 +13,21 @@ public:
     bool busy() const { return m_phase != Phase::Idle; }
     void start(const QJsonObject &config, const QString &file, bool previewOnly);
     void cancel();
+    void clearPreview();
+    QString previewPath() const { return m_previewPath; }
 signals:
     void busyChanged(bool busy);
     void message(const QString &text);
     void progress(qint64 sent, qint64 total);
     void completed(const UploadResult &result);
+    void previewChanged();
     void previewReady(const QString &path);
 private:
-    void prepare(const ParsedTargetConfig &config, bool previewOnly, const CredentialStore::Values &values);
-    void finish();
+    void prepare(const ParsedTargetConfig &config, bool previewOnly, const CredentialStore::Values &values, quint64 run);
+    void finish(quint64 run);
+    bool current(quint64 run) const { return busy() && run == m_generation; }
+    quint64 m_generation = 0;
+    QString m_previewPath;
     // Completing or cancelling returns to Idle; prepared previews remain owned separately.
     enum class Phase { Idle, ResolvingCredentials, Preprocessing, Uploading };
     Phase m_phase = Phase::Idle;

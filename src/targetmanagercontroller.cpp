@@ -158,6 +158,7 @@ void TargetManagerController::refresh(const QString& select)
 }
 void TargetManagerController::load(const TargetFileStore::Entry& entry)
 {
+    cancelExport();
     m_editState = EditState::Loading;
     m_entry = entry;
     m_customizing = false;
@@ -253,7 +254,7 @@ bool TargetManagerController::save()
 }
 void TargetManagerController::request(const QString& action, const QString& argument)
 {
-    if (m_pendingAction != PendingAction::None)
+    if (m_pendingAction != PendingAction::None || m_exportPhase != ExportPhase::Idle)
         return;
     if (action == QLatin1StringView("select")) {
         if (argument == m_entry.path)
@@ -425,17 +426,21 @@ void TargetManagerController::reviewExport()
     }
     QStringList replaced;
     const auto object = TargetFileStore::portable(m_draft.document(), &replaced);
+    m_exportPhase = ExportPhase::Reviewing;
     emit exportReviewRequested(
         ConfigJson::text(object), replaced.isEmpty() ? tr("none") : replaced.join(QStringLiteral(", ")));
 }
 void TargetManagerController::acceptExport(const QString& text)
 {
+    if (m_exportPhase != ExportPhase::Reviewing) return;
     const auto document = QJsonDocument::fromJson(text.toUtf8());
     if (!document.isObject()) {
+        cancelExport();
         emit error(tr("The export must contain a JSON object."));
         return;
     }
     m_export = text.toUtf8();
+    m_exportPhase = ExportPhase::ChoosingDestination;
     auto folder = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
     if (!QFileInfo(folder).isDir())
         folder = QDir::homePath();
@@ -445,7 +450,10 @@ void TargetManagerController::acceptExport(const QString& text)
 }
 void TargetManagerController::exportFile(const QUrl& url)
 {
-    if (!url.isLocalFile() || m_export.isEmpty())
+    if (m_exportPhase != ExportPhase::ChoosingDestination) return;
+    const auto bytes = m_export;
+    cancelExport();
+    if (!url.isLocalFile() || bytes.isEmpty())
         return;
     const auto path = url.toLocalFile();
     const auto absolute = QFileInfo(path).absoluteFilePath();
@@ -455,11 +463,16 @@ void TargetManagerController::exportFile(const QUrl& url)
         return;
     }
     QSaveFile output(path);
-    if (!output.open(QIODevice::WriteOnly) || output.write(m_export) != m_export.size() || !output.commit())
+    if (!output.open(QIODevice::WriteOnly) || output.write(bytes) != bytes.size() || !output.commit())
         emit error(tr("Could not write export."));
     else {
-        m_export.clear();
         m_message = tr("Target exported.");
         emit changed();
     }
+}
+
+void TargetManagerController::cancelExport()
+{
+    m_export.clear();
+    m_exportPhase = ExportPhase::Idle;
 }

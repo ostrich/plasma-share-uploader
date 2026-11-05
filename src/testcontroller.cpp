@@ -31,8 +31,8 @@ TestController::TestController(TargetDraft* draft, CredentialStore* credentials,
         m_progress = total > 0 ? double(sent) / double(total) : -1;
         emit changed();
     });
-    connect(&m_runner, &UploadTestRunner::previewReady, this, [this](const QString& path) {
-        m_preview = path;
+    connect(&m_runner, &UploadTestRunner::previewChanged, this, &TestController::changed);
+    connect(&m_runner, &UploadTestRunner::previewReady, this, [this](const QString&) {
         log(tr("Preview ready; no network upload was performed."));
     });
     connect(&m_runner, &UploadTestRunner::completed, this, [this](const UploadResult& result) {
@@ -70,7 +70,7 @@ void TestController::reset()
     m_headers.setValue(QVariantMap { });
     m_status = 200;
     m_log.clear();
-    m_preview.clear();
+    m_runner.clearPreview();
     m_progress = 0;
     m_url = m_draft->stringValue({ QStringLiteral("request"), QStringLiteral("url") });
     setResponseBody({ });
@@ -102,7 +102,7 @@ void TestController::start(bool previewOnly)
 {
     if (busy() || !valid())
         return;
-    m_preview.clear();
+    m_runner.clearPreview();
     emit changed();
     if (!previewOnly)
         log(tr("Request definition (credentials concealed):\n%1")
@@ -193,7 +193,7 @@ void TestController::usePointer(const QModelIndex& index, const QString& output)
 }
 void TestController::openPreview()
 {
-    if (!m_preview.isEmpty())
-        QDesktopServices::openUrl(QUrl::fromLocalFile(m_preview));
+    if (!preview().isEmpty())
+        QDesktopServices::openUrl(QUrl::fromLocalFile(preview()));
 }
 void TestController::copyDiagnostics() { QGuiApplication::clipboard()->setText(m_log); }

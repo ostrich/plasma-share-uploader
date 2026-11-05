@@ -50,7 +50,7 @@ public:
     JsonRowsModel* headers() { return &m_headers; }
     QAbstractItemModel* tree() { return &m_tree; }
     QString diagnostics() const { return m_log; }
-    QString preview() const { return m_preview; }
+    QString preview() const { return m_runner.previewPath(); }
     double progress() const { return m_progress; }
     void reset();
     Q_INVOKABLE void validate();
@@ -79,7 +79,7 @@ private:
     UploadTestRunner m_runner;
     JsonRowsModel m_headers;
     QStandardItemModel m_tree;
-    QString m_file, m_url, m_body, m_log, m_preview;
+    QString m_file, m_url, m_body, m_log;
     int m_status = 200;
     double m_progress = 0;
 };
