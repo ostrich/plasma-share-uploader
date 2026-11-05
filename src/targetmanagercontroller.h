@@ -34,7 +34,7 @@ public:
     QString selectedPath() const { return m_entry.path; }
     QString title() const;
     QString state() const;
-    bool dirty() const { return m_dirty; }
+    bool dirty() const { return m_editState == EditState::Dirty; }
     bool hasEntry() const { return !m_entry.path.isEmpty(); }
     QString status() const;
     QString diagnosticText() const;
@@ -84,6 +84,12 @@ private:
     QString m_search, m_notice, m_message;
     QByteArray m_export;
     int m_filter = 0;
-    bool m_dirty = false, m_loading = false, m_customizing = false, m_diskChanged = false;
-    std::function<void()> m_pending, m_confirmed;
+    // Editing and modal action resolution are independent state machines.
+    enum class EditState { Loading, Clean, Dirty };
+    enum class PendingAction { None, ResolveDraft, Confirm };
+    EditState m_editState = EditState::Clean;
+    PendingAction m_pendingAction = PendingAction::None;
+    bool m_customizing = false, m_diskChanged = false;
+    // Populated exactly while awaiting the matching dialog response.
+    std::function<void()> m_continuation;
 };

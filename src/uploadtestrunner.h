@@ -10,7 +10,7 @@ class UploadTestRunner final : public QObject
 public:
     explicit UploadTestRunner(QObject *parent = nullptr, CredentialStore *credentials = nullptr);
     ~UploadTestRunner() override;
-    bool busy() const { return !m_run.isNull(); }
+    bool busy() const { return m_phase != Phase::Idle; }
     void start(const QJsonObject &config, const QString &file, bool previewOnly);
     void cancel();
 signals:
@@ -22,6 +22,9 @@ signals:
 private:
     void prepare(const ParsedTargetConfig &config, bool previewOnly, const CredentialStore::Values &values);
     void finish();
+    // Completing or cancelling returns to Idle; prepared previews remain owned separately.
+    enum class Phase { Idle, ResolvingCredentials, Preprocessing, Uploading };
+    Phase m_phase = Phase::Idle;
     CredentialStore *m_credentials;
     QPointer<QObject> m_run;
     std::unique_ptr<QTemporaryDir> m_stage;

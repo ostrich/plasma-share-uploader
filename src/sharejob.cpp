@@ -70,10 +70,10 @@ ShareJob::~ShareJob()
 
 void ShareJob::start()
 {
-    if (m_started) {
+    if (m_phase != Phase::Idle) {
         return;
     }
-    m_started = true;
+    m_phase = Phase::Staging;
     m_pickerParent = invokingWindow();
     // Purpose callers may remove their temporary input as soon as start() returns.
     m_originalFiles = collectSharedFilePaths(data());
@@ -93,6 +93,8 @@ void ShareJob::start()
 
 void ShareJob::prepareTarget()
 {
+    Q_ASSERT(m_phase == Phase::Staging || m_phase == Phase::SelectingTarget);
+    m_phase = Phase::ResolvingCredentials;
     const auto missing = CredentialStore::missingEnvironment(m_targetConfig.request);
     if (!missing.isEmpty()) {
         finishError(QStringLiteral("Missing environment values: %1").arg(missing.join(QStringLiteral(", "))));
@@ -100,6 +102,7 @@ void ShareJob::prepareTarget()
     }
     m_credentials->read(CredentialStore::walletKeys(m_targetConfig.request), this,
         [this](CredentialStore::Values values, const QString &error) {
+            if (m_phase != Phase::ResolvingCredentials) return;
             if (!error.isEmpty()) { finishError(error); return; }
             m_uploader.setConfig(m_targetConfig);
             m_uploader.setSecrets(values);
@@ -148,7 +151,10 @@ void ShareJob::publishResults()
 
 void ShareJob::startNextUpload()
 {
+    if (m_phase == Phase::Finished) return;
+    Q_ASSERT(m_phase == Phase::ResolvingCredentials || m_phase == Phase::Uploading);
     if (m_nextIndex >= m_files.size()) {
+        m_phase = Phase::Finished;
         publishResults();
 
         const int count = m_uploadedUrls.size();
@@ -163,9 +169,11 @@ void ShareJob::startNextUpload()
         return;
     }
 
+    m_phase = Phase::Preprocessing;
     m_preprocessing = PreUploadProcessor::preprocessFileAsync(
         m_targetConfig.preUpload, m_files.at(m_nextIndex), this,
         [this](PreUploadProcessor::Result prepared) {
+            if (m_phase != Phase::Preprocessing) return;
             m_prepared = std::move(prepared);
             if (!m_prepared.ok) {
                 finishError(m_prepared.errorMessage);
@@ -177,6 +185,8 @@ void ShareJob::startNextUpload()
 
 void ShareJob::uploadPreparedFile()
 {
+    if (m_phase != Phase::Preprocessing) return;
+    m_phase = Phase::Uploading;
     const QString sourcePath = m_originalFiles.value(m_nextIndex, m_files.at(m_nextIndex));
     QNetworkReply *reply = m_uploader.upload(m_prepared.uploadPath, &m_network);
     if (!reply) {
@@ -185,6 +195,7 @@ void ShareJob::uploadPreparedFile()
     }
 
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        if (m_phase != Phase::Uploading) { reply->deleteLater(); return; }
         const UploadResult result = m_uploader.parseReply(reply);
         reply->deleteLater();
 
@@ -202,6 +213,8 @@ void ShareJob::uploadPreparedFile()
 
 void ShareJob::finishError(const QString &message)
 {
+    if (m_phase == Phase::Finished) return;
+    m_phase = Phase::Finished;
     setError(1);
     publishResults();
     const QString details = m_uploadedUrls.isEmpty() ? message
@@ -218,6 +231,8 @@ void ShareJob::finishError(const QString &message)
 
 void ShareJob::finishCancelled()
 {
+    if (m_phase == Phase::Finished) return;
+    m_phase = Phase::Finished;
     setError(0);
     setErrorText(QStringLiteral("Upload cancelled."));
     cleanupTempArtifacts();
@@ -259,6 +274,7 @@ QString ShareJob::stageInputFiles()
 
 void ShareJob::selectTarget()
 {
+    m_phase = Phase::SelectingTarget;
     if (!m_pickerParent) m_pickerParent = invokingWindow();
     TargetRegistry registry;
     const TargetRegistry::LoadResult loadResult = registry.loadTargets();

@@ -88,17 +88,20 @@ public:
     {
         m_timeout.setSingleShot(true);
         connect(&m_timeout, &QTimer::timeout, this, [this]() {
-            m_timedOut = true;
+            if (m_phase != Phase::RunningCommand) return;
+            m_phase = Phase::StoppingTimedOutCommand;
             m_process.kill();
         });
         connect(&m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
+            if (m_phase == Phase::Finished) return;
             if (error == QProcess::FailedToStart) {
                 finish(QStringLiteral("Failed to start pre-upload command '%1': %2").arg(m_process.program(), m_process.errorString()));
             }
         });
         connect(&m_process, &QProcess::finished, this, [this](int exitCode, QProcess::ExitStatus status) {
+            if (m_phase == Phase::Finished) return;
             m_timeout.stop();
-            if (m_timedOut) {
+            if (m_phase == Phase::StoppingTimedOutCommand) {
                 finish(QStringLiteral("Pre-upload command timed out: %1").arg(formatCommand(m_argv)));
                 return;
             }
@@ -127,6 +130,8 @@ public:
 private:
     void prepare(const ParsedPreUploadConfig &config, const QString &filePath)
     {
+        Q_ASSERT(m_phase == Phase::Scheduled);
+        m_phase = Phase::Preparing;
         m_result.uploadPath = filePath;
         if (config.rules.isEmpty()) {
             finish();
@@ -179,6 +184,7 @@ private:
 
     void runNextCommand()
     {
+        Q_ASSERT(m_phase == Phase::Preparing || m_phase == Phase::RunningCommand);
         if (m_nextCommand >= m_rule.commands.size()) {
             if (m_rule.fileHandling == PreUploadFileHandling::OutputFile) {
                 const QFileInfo outInfo(m_outFilePath);
@@ -199,16 +205,17 @@ private:
             finish(QStringLiteral("Pre-upload command is empty."));
             return;
         }
-        m_timedOut = false;
+        m_phase = Phase::RunningCommand;
         m_process.start(m_argv.first(), m_argv.mid(1));
         m_timeout.start(m_rule.timeoutMs > 0 ? m_rule.timeoutMs : kDefaultPreUploadTimeoutMs);
     }
 
     void finish(const QString &error = {})
     {
-        if (!m_completed) {
+        if (m_phase == Phase::Finished) {
             return;
         }
+        m_phase = Phase::Finished;
         m_timeout.stop();
         m_result.ok = error.isEmpty();
         m_result.errorMessage = error;
@@ -228,7 +235,8 @@ private:
     QString m_outFilePath;
     QStringList m_argv;
     int m_nextCommand = 0;
-    bool m_timedOut = false;
+    enum class Phase { Scheduled, Preparing, RunningCommand, StoppingTimedOutCommand, Finished };
+    Phase m_phase = Phase::Scheduled;
     QProcess m_process;
     QTimer m_timeout;
 };

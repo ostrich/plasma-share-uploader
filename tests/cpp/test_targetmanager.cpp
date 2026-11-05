@@ -392,6 +392,18 @@ void TargetManagerTest::missingCredentialsAndCancellationDoNotUpload()
     QTest::qWait(10);
     QVERIFY(!runner.busy());
     QVERIFY(server.requests().isEmpty());
+    // Cancellation may occur synchronously while start announces its busy state.
+    const int reads = credentials.reads;
+    const auto connection = connect(&runner, &UploadTestRunner::busyChanged, &runner,
+        [&runner](bool busy) { if (busy) runner.cancel(); });
+    runner.start(object, { }, false);
+    QVERIFY(!runner.busy());
+    QCOMPARE(credentials.reads, reads);
+    disconnect(connection);
+    runner.start(target(server.url()), { }, true);
+    QTRY_VERIFY(!runner.busy());
+    QVERIFY(server.requests().isEmpty());
+
 }
 
 void TargetManagerTest::offlineParsingAndValidationPerformNoUpload()
@@ -558,6 +570,9 @@ void TargetManagerTest::managerDiscardsEditsBeforeDuplicating()
     manager.draft()->setValue({ QStringLiteral("displayName") }, QStringLiteral("Discard me"));
     manager.request(QStringLiteral("duplicate"));
     QCOMPARE(ask.size(), 1);
+    manager.confirm(true); // A confirmation reply cannot consume a draft-resolution action.
+    manager.request(QStringLiteral("new"));
+    QCOMPARE(ask.size(), 1);
     manager.resolveDraft(QStringLiteral("cancel"));
     QCOMPARE(manager.draft()->stringValue({ QStringLiteral("displayName") }), QStringLiteral("Discard me"));
     manager.request(QStringLiteral("duplicate"));
@@ -571,6 +586,14 @@ void TargetManagerTest::managerDiscardsEditsBeforeDuplicating()
     manager.resolveDraft(QStringLiteral("save"));
     QCOMPARE(closed.size(), 1);
     QVERIFY(!manager.dirty());
+    QSignalSpy confirmation(&manager, &TargetManagerController::confirmationRequested);
+    manager.request(QStringLiteral("delete"));
+    QCOMPARE(confirmation.size(), 1);
+    manager.resolveDraft(QStringLiteral("discard"));
+    manager.request(QStringLiteral("new"));
+    QCOMPARE(manager.draft()->stringValue({ QStringLiteral("displayName") }), QStringLiteral("Test host (copy)"));
+    manager.confirm(false);
+    QVERIFY(QFileInfo::exists(active.filePath(QStringLiteral("disabled/raw_2.json"))));
 }
 
 void TargetManagerTest::credentialHelpersStoreReferencesAndHandleDraftChanges()

@@ -20,13 +20,13 @@ TargetManagerController::TargetManagerController(
     , m_watcher(this)
 {
     connect(&m_draft, &TargetDraft::edited, this, [this]() {
-        if (!m_loading) {
-            m_dirty = true;
+        if (m_editState != EditState::Loading) {
+            m_editState = EditState::Dirty;
             emit changed();
         }
     });
     connect(&m_draft, &TargetDraft::problemsChanged, this, [this]() {
-        if (!m_loading)
+        if (m_editState != EditState::Loading)
             emit changed();
     });
     connect(&m_test, &TestController::busyChanged, this, &TargetManagerController::changed);
@@ -43,7 +43,7 @@ QString TargetManagerController::title() const
     if (!hasEntry())
         return tr("Add an upload target");
     return m_draft.document().value(QStringLiteral("displayName")).toString(QFileInfo(m_entry.path).fileName())
-        + (m_dirty ? QStringLiteral(" *") : QString { });
+        + (dirty() ? QStringLiteral(" *") : QString { });
 }
 QString TargetManagerController::state() const
 {
@@ -52,7 +52,7 @@ QString TargetManagerController::state() const
 QStringList TargetManagerController::diagnostics() const
 {
     auto problems = hasEntry() ? m_draft.problems() : QStringList { };
-    if (!m_dirty)
+    if (!dirty())
         problems += m_entry.problems;
     if (m_diskChanged)
         problems.prepend(tr("This file changed on disk. Reload before saving; unsaved changes will not overwrite it."));
@@ -80,7 +80,7 @@ QVariantMap TargetManagerController::actions() const
 {
     using Kind = TargetFileStore::Kind;
     const bool selected = hasEntry() && !m_test.busy();
-    return { { QStringLiteral("save"), selected && m_dirty && m_entry.editable() },
+    return { { QStringLiteral("save"), selected && dirty() && m_entry.editable() },
         { QStringLiteral("saveText"), m_entry.kind == Kind::Disabled ? tr("Save disabled draft") : tr("Save") },
         { QStringLiteral("toggle"), selected && !m_entry.revision.isEmpty() },
         { QStringLiteral("toggleText"),
@@ -158,9 +158,8 @@ void TargetManagerController::refresh(const QString& select)
 }
 void TargetManagerController::load(const TargetFileStore::Entry& entry)
 {
-    m_loading = true;
+    m_editState = EditState::Loading;
     m_entry = entry;
-    m_dirty = false;
     m_customizing = false;
     m_diskChanged = false;
     m_notice.clear();
@@ -178,7 +177,7 @@ void TargetManagerController::load(const TargetFileStore::Entry& entry)
         if (QFileInfo(QFileInfo(entry.path).absolutePath()).isDir())
             m_watcher.addPath(QFileInfo(entry.path).absolutePath());
     }
-    m_loading = false;
+    m_editState = EditState::Clean;
     emit changed();
     if (hasEntry() && !m_draft.hasObject())
         emit showTab(5);
@@ -189,21 +188,23 @@ void TargetManagerController::guard(std::function<void()> next)
         emit error(tr("Cancel the running test before switching targets or closing."));
         return;
     }
-    if (m_pending || m_confirmed)
+    if (m_pendingAction != PendingAction::None)
         return;
-    if (!m_dirty) {
+    if (!dirty()) {
         next();
         return;
     }
-    m_pending = std::move(next);
+    m_pendingAction = PendingAction::ResolveDraft;
+    m_continuation = std::move(next);
     emit discardRequested();
 }
 void TargetManagerController::resolveDraft(const QString& choice)
 {
-    if (!m_pending)
+    if (m_pendingAction != PendingAction::ResolveDraft)
         return;
-    auto next = std::move(m_pending);
-    m_pending = { };
+    auto next = std::move(m_continuation);
+    m_continuation = { };
+    m_pendingAction = PendingAction::None;
     if (choice == QLatin1StringView("cancel"))
         return;
     if (choice == QLatin1StringView("save")) {
@@ -217,8 +218,10 @@ void TargetManagerController::resolveDraft(const QString& choice)
 }
 void TargetManagerController::confirm(bool accepted)
 {
-    auto action = std::move(m_confirmed);
-    m_confirmed = { };
+    if (m_pendingAction != PendingAction::Confirm) return;
+    auto action = std::move(m_continuation);
+    m_continuation = { };
+    m_pendingAction = PendingAction::None;
     if (accepted && action)
         action();
 }
@@ -242,7 +245,7 @@ bool TargetManagerController::save()
         return false;
     }
     const auto path = m_entry.path;
-    m_dirty = false;
+    m_editState = EditState::Clean;
     refresh(path);
     m_message = tr("Target saved.");
     emit changed();
@@ -250,6 +253,8 @@ bool TargetManagerController::save()
 }
 void TargetManagerController::request(const QString& action, const QString& argument)
 {
+    if (m_pendingAction != PendingAction::None)
+        return;
     if (action == QLatin1StringView("select")) {
         if (argument == m_entry.path)
             return;
@@ -289,7 +294,8 @@ void TargetManagerController::request(const QString& action, const QString& argu
     else if (action == QLatin1StringView("delete") || action == QLatin1StringView("restore"))
         guard([this, action]() {
             const auto entry = m_entry;
-            m_confirmed = [this, entry, action]() {
+            m_pendingAction = PendingAction::Confirm;
+            m_continuation = [this, entry, action]() {
                 const auto result
                     = action == QLatin1StringView("delete") ? m_store.remove(entry) : m_store.restorePreset(entry);
                 if (!result.isEmpty())
@@ -327,7 +333,7 @@ void TargetManagerController::newTarget()
                 { QStringLiteral("url"), QJsonObject { { QStringLiteral("type"), QStringLiteral("text_url") } } } } } };
     entry.bytes = QJsonDocument(entry.object).toJson();
     load(entry);
-    m_dirty = true;
+    m_editState = EditState::Dirty;
     emit changed();
     emit showTab(0);
 }
@@ -346,7 +352,7 @@ void TargetManagerController::duplicate()
     entry.object = object;
     entry.bytes = QJsonDocument(object).toJson();
     load(entry);
-    m_dirty = true;
+    m_editState = EditState::Dirty;
     m_message = tr("Independent disabled draft. Credential references remain shared until changed.");
     emit changed();
 }
@@ -359,7 +365,7 @@ void TargetManagerController::customize()
     if (!m_entry.linked)
         return;
     m_customizing = true;
-    m_dirty = true;
+    m_editState = EditState::Dirty;
     m_draft.setEditable(true);
     m_notice
         = tr("Save will replace this link with an independent custom copy. The packaged file will stay untouched.");
@@ -401,7 +407,7 @@ void TargetManagerController::importFile(const QUrl& url)
     }
     entry.path = m_store.activePath() + QStringLiteral("/disabled/") + id + QStringLiteral(".json");
     load(entry);
-    m_dirty = true;
+    m_editState = EditState::Dirty;
     m_notice = tr("Imported as a disabled draft. Review the JSON, credentials, and preprocessing commands before "
                   "enabling or testing it.");
     emit changed();

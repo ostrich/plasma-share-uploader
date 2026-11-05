@@ -45,7 +45,9 @@ private:
     QPointer<QObject> m_preprocessing;
     QPointer<TargetPickerDialog> m_picker;
     QPointer<QWindow> m_pickerParent;
-    bool m_started = false;
+    // Finished is terminal, including errors and picker cancellation.
+    enum class Phase { Idle, Staging, SelectingTarget, ResolvingCredentials, Preprocessing, Uploading, Finished };
+    Phase m_phase = Phase::Idle;
     int m_nextIndex = 0;
     QNetworkAccessManager m_network;
     CredentialStore *m_credentials;

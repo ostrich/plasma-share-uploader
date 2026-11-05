@@ -32,12 +32,16 @@ void UploadTestRunner::start(const QJsonObject &object, const QString &file, boo
     if (!previewOnly && ConstraintMatcher::filterTargets({TargetDefinition{config}}, {m_file}).isEmpty()) {
         emit message(tr("The sample does not match this target's file constraints.")); return;
     }
-    m_run = new QObject(this); emit busyChanged(true);
+    m_run = new QObject(this);
+    m_phase = previewOnly ? Phase::Preprocessing : Phase::ResolvingCredentials;
+    emit busyChanged(true);
+    if (!busy()) return; // A signal handler may cancel synchronously.
     if (previewOnly) prepare(config, true, {});
     else {
         emit message(tr("Resolving credentials..."));
         m_credentials->read(CredentialStore::walletKeys(config.request), m_run,
             [this, config](CredentialStore::Values values, const QString &error) {
+                if (m_phase != Phase::ResolvingCredentials) return;
                 if (!error.isEmpty()) { emit message(error); finish(); return; }
                 prepare(config, false, values);
             });
@@ -46,16 +50,21 @@ void UploadTestRunner::start(const QJsonObject &object, const QString &file, boo
 
 void UploadTestRunner::prepare(const ParsedTargetConfig &config, bool previewOnly, const CredentialStore::Values &values)
 {
+    if (!busy()) return;
+    Q_ASSERT(m_phase == Phase::ResolvingCredentials || m_phase == Phase::Preprocessing);
+    m_phase = Phase::Preprocessing;
     m_secrets = CredentialStore::secretValues(config.request, values);
     emit message(tr("Preparing a temporary copy of %1 (%2 bytes)...").arg(QFileInfo(m_file).fileName()).arg(QFileInfo(m_file).size()));
     PreUploadProcessor::preprocessFileAsync(config.preUpload, m_file, m_run,
         [this, config, previewOnly, values](PreUploadProcessor::Result prepared) {
+            if (m_phase != Phase::Preprocessing) return;
             m_prepared = std::move(prepared);
             if (!m_prepared.ok) { emit message(CredentialStore::redact(m_prepared.errorMessage, m_secrets)); finish(); return; }
             const auto info = QFileInfo(m_prepared.uploadPath);
             emit message(tr("Prepared %1: %2 bytes, %3").arg(info.fileName()).arg(info.size()).arg(QMimeDatabase().mimeTypeForFile(info).name()));
             if (previewOnly) { emit previewReady(m_prepared.uploadPath); finish(); return; }
             auto uploader = std::make_shared<TargetUploader>(config); uploader->setSecrets(values);
+            m_phase = Phase::Uploading;
             auto *network = new QNetworkAccessManager(m_run);
             auto *reply = uploader->upload(m_prepared.uploadPath, network);
             if (!reply) { emit message(uploader->lastError()); finish(); return; }
@@ -85,13 +94,16 @@ void UploadTestRunner::prepare(const ParsedTargetConfig &config, bool previewOnl
 
 void UploadTestRunner::finish()
 {
+    if (!busy()) return;
     if (m_run) { m_run->deleteLater(); m_run.clear(); }
+    m_phase = Phase::Idle;
     emit busyChanged(false);
 }
 
 void UploadTestRunner::cancel()
 {
     if (!busy()) return;
+    m_phase = Phase::Idle;
     delete m_run.data(); m_run.clear(); m_prepared = {}; m_stage.reset();
     emit message(tr("Test cancelled. A remote upload may already have completed."));
     emit busyChanged(false);

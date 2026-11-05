@@ -58,6 +58,9 @@ void ShareJobTest::noLocalFilesFails()
     QTRY_COMPARE(resultSpy.count(), 1);
     QCOMPARE(job.error(), 1);
     QCOMPARE(job.errorText(), QStringLiteral("No local files found to upload."));
+    job.start();
+    QTest::qWait(10);
+    QCOMPARE(resultSpy.count(), 1);
 }
 
 void ShareJobTest::uploadsMultipleFilesSequentiallyAndUpdatesClipboard()
