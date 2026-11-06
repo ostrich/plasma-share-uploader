@@ -22,6 +22,8 @@ class ShareJobTest final : public QObject {
 
 private slots:
     void noLocalFilesFails();
+    void rejectsOversizedResponses();
+    void stagingCanBeCancelled();
     void uploadsMultipleFilesSequentiallyAndUpdatesClipboard();
     void uploadsExposeVariantUrlsAndResponseMetadata();
     void stagesInputFilesBeforeUpload();
@@ -451,6 +453,44 @@ void ShareJobTest::pickerCancellationFinishesAfterStartReturns()
     QTRY_COMPARE(finished.count(), 1);
     QCOMPARE(job.error(), 0);
     QCOMPARE(job.errorText(), QStringLiteral("Upload cancelled."));
+}
+
+void ShareJobTest::rejectsOversizedResponses()
+{
+    HttpCaptureServer server;
+    QVERIFY(server.start());
+    server.enqueueResponse({200, "OK", "text/plain", {}, QByteArray(2 * 1024 * 1024, 'x')});
+    QTemporaryDir dir;
+    const auto file = writeTempFile(dir, QStringLiteral("sample.txt"), "data");
+    ShareJob job(QJsonDocument(rawTarget(server.url())).toJson());
+    job.setAutoDelete(false);
+    job.setData(QJsonObject{{QStringLiteral("url"), QUrl::fromLocalFile(file).toString()}});
+    QSignalSpy done(&job, &KJob::result);
+    job.start();
+    QTRY_COMPARE(done.size(), 1);
+    QVERIFY(job.error() != 0);
+    QVERIFY(job.errorText().contains(QStringLiteral("1 MiB")));
+}
+void ShareJobTest::stagingCanBeCancelled()
+{
+    HttpCaptureServer server;
+    QVERIFY(server.start());
+    QTemporaryDir dir;
+    QFile source(dir.filePath(QStringLiteral("large.bin")));
+    QVERIFY(source.open(QIODevice::WriteOnly));
+    QVERIFY(source.resize(128 * 1024 * 1024));
+    source.close();
+    const auto before = uploadTempDirectories();
+    ShareJob job(QJsonDocument(rawTarget(server.url())).toJson());
+    job.setAutoDelete(false);
+    job.setData(QJsonObject{{QStringLiteral("url"), QUrl::fromLocalFile(source.fileName()).toString()}});
+    job.start();
+    QVERIFY(QFile::remove(source.fileName()));
+    bool heartbeat = false;
+    QTimer::singleShot(0, &job, [&]() { heartbeat = true; QVERIFY(job.kill(KJob::EmitResult)); });
+    QTRY_VERIFY(heartbeat);
+    QTRY_COMPARE(uploadTempDirectories(), before);
+    QVERIFY(server.requests().isEmpty());
 }
 
 int main(int argc, char** argv)

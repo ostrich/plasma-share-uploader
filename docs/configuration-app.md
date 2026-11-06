@@ -33,6 +33,13 @@ uses the plugin's existing initialization: a missing directory gets default
 preset links; an existing empty directory stays empty. There is no enablement
 list, inherited configuration overlay, migration process, or background daemon.
 
+## Find and repair validation issues
+
+Open **Details…** and select an issue to open its editor tab and focus the field.
+Issues without a matching form control open the JSON editor. Incomplete table
+edits are discarded when an authoritative document/body replacement reloads
+that table; their obsolete errors are cleared with them.
+
 ## Edit a definition
 
 The editor exposes all fields in [target format version 1](target-format.md):
@@ -167,6 +174,14 @@ manager. Tests do not copy upload URLs to the clipboard, send normal upload
 notifications, retry, or save history. Results stay in the inspector and diagnostics;
 **Copy diagnostics** is explicit. Editing the draft does not retroactively change
 a captured response—run the parser or upload again as needed.
+
+Export excludes managed target directories even when reached through a directory
+symlink. Sensitive fields mixing literal text with credential references are
+redacted as a whole; complete references with optional `Bearer ` or `Basic `
+prefixes remain portable.
+
+Production sharing also redacts known secrets from errors and captured response
+metadata. The actual shared, thumbnail and deletion URLs remain usable.
 
 Captured responses are capped at 1 MiB, and diagnostic output/tree sizes are
 bounded. Known credential/environment values and recognized inline secrets are

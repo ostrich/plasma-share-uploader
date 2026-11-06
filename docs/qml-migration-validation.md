@@ -116,3 +116,17 @@ Temporary artifacts are not part of the source distribution. The automated suite
 requires neither public upload services nor a real wallet. Public-service behavior,
 other Qt versions, and interactive native-Wayland host behavior were not reverified
 by this migration; the live host interaction checks used XWayland on Plasma.
+
+## Validation issue navigation (verified 2026-11-06)
+
+Starting state: a manager window with an editable target and validation issues.
+Open `targetDiagnostics` (Details), wait for `diagnosticsDialog.opened`, then
+select `diagnosticIssue.<index>`. The dialog closes, `editorTabs.currentIndex`
+selects the relevant page, and the corresponding field receives active focus.
+Unmapped issues open `targetJson`. Reload/discard restores the saved target.
+
+The regression `test_diagnosticOpensField` verifies the request URL route using
+the live QML controls. Tested offscreen with Qt 6.12, the software rendering
+backend, and the test window's 1180 x 860 layout. This does not establish behavior
+at other display scales or with native desktop dialogs. Navigation and focus
+assertions are distinct from whether the edited target can upload successfully.

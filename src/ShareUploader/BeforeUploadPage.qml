@@ -7,6 +7,8 @@ FormPage {
     id: root
 
     required property TargetDraft draft
+    readonly property var ruleList: Object(draft.document).preUpload || []
+    readonly property var selectedRule: ruleList[rules.currentIndex]
     readonly property list<string> rulePath: ["preUpload", String(rules.currentIndex)]
 
     enabled: draft.editable && draft.hasObject
@@ -56,10 +58,7 @@ FormPage {
     }
     ComboBox {
         Layout.fillWidth: true
-        currentIndex: {
-            root.draft.document;
-            return ["inplace_copy", "output_file"].indexOf(root.draft.stringValue(root.rulePath.concat("fileHandling")));
-        }
+        currentIndex: ["inplace_copy", "output_file"].indexOf(root.selectedRule ? root.selectedRule.fileHandling : "")
         enabled: rules.currentIndex >= 0
         model: [qsTr("Modify a temporary copy"), qsTr("Write a separate output file")]
 
@@ -75,11 +74,7 @@ FormPage {
         from: 1
         live: true
         to: 2147483647
-        value: {
-            root.draft.document;
-            const v = root.draft.value(root.rulePath.concat("timeoutMs"));
-            return v === undefined ? 30000 : v;
-        }
+        value: root.selectedRule && root.selectedRule.timeoutMs !== undefined ? root.selectedRule.timeoutMs : 30000
 
         onValueModified: root.draft.setValue(root.rulePath.concat("timeoutMs"), value)
     }

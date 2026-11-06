@@ -16,6 +16,10 @@ class PreUploadProcessorTest final : public QObject {
 
 private slots:
     void returnsOriginalPathWhenNoRulesMatch();
+    void literalPlaceholderFilename();
+    void boundsCommandDiagnostics();
+    void cancelsProcessTree_data();
+    void cancelsProcessTree();
     void inplaceCopyRunsMultipleCommandsAndKeepsOriginalUntouched();
     void outputFileProducesSeparateUploadFile();
     void reportsCommandFailure();
@@ -207,6 +211,75 @@ void PreUploadProcessorTest::readOnlyJpegSupportsBundledPreprocessing()
     QCOMPARE(QFile::permissions(source), permissions);
     QVERIFY(original.open(QIODevice::ReadOnly));
     QCOMPARE(original.readAll(), bytes);
+}
+
+void PreUploadProcessorTest::literalPlaceholderFilename()
+{
+    QTemporaryDir dir;
+    const auto source = writeTempFile(dir, QStringLiteral("${FILE}-${OUT_FILE}.txt"), "original");
+    for (bool outputFile : {false, true}) {
+        const auto command = outputFile
+            ? commandObject({pythonExecutable(), fixtureScriptPath(QStringLiteral("copy_with_prefix.py")),
+                             QStringLiteral("${FILE}"), QStringLiteral("${OUT_FILE}"), QStringLiteral("changed-")})
+            : commandObject({pythonExecutable(), fixtureScriptPath(QStringLiteral("append_text.py")),
+                             QStringLiteral("${FILE}"), QStringLiteral("-changed")});
+        const QJsonObject config{{QStringLiteral("preUpload"), QJsonArray{QJsonObject{
+            {QStringLiteral("mime"), QJsonArray{QStringLiteral("*/*")}},
+            {QStringLiteral("fileHandling"), outputFile ? QStringLiteral("output_file") : QStringLiteral("inplace_copy")},
+            {QStringLiteral("commands"), QJsonArray{command}}}}}};
+        auto result = PreUploadProcessor::preprocessFile(config, source);
+        QVERIFY2(result.ok, qPrintable(result.errorMessage));
+        QFile output(result.uploadPath);
+        QVERIFY(output.open(QIODevice::ReadOnly));
+        QCOMPARE(output.readAll(), outputFile ? QByteArray("changed-original") : QByteArray("original-changed"));
+    }
+}
+void PreUploadProcessorTest::boundsCommandDiagnostics()
+{
+    QTemporaryDir dir;
+    const auto source = writeTempFile(dir, QStringLiteral("source.txt"), "original");
+    const QJsonObject config{{QStringLiteral("preUpload"), QJsonArray{QJsonObject{
+        {QStringLiteral("mime"), QJsonArray{QStringLiteral("*/*")}},
+        {QStringLiteral("fileHandling"), QStringLiteral("inplace_copy")},
+        {QStringLiteral("commands"), QJsonArray{commandObject({pythonExecutable(), QStringLiteral("-c"),
+            QStringLiteral("import sys; sys.stdout.write('x'*2000000); sys.stderr.write('y'*2000000+'END'); sys.exit(1)"), QStringLiteral("${FILE}")})}}}}}};
+    const auto result = PreUploadProcessor::preprocessFile(config, source);
+    QVERIFY(!result.ok);
+    QVERIFY(result.errorMessage.size() < 66000);
+    QVERIFY(result.errorMessage.contains(QStringLiteral("truncated")));
+    QVERIFY(result.errorMessage.endsWith(QStringLiteral("END")));
+}
+void PreUploadProcessorTest::cancelsProcessTree_data()
+{
+    QTest::addColumn<bool>("timeout");
+    QTest::newRow("cancel") << false;
+    QTest::newRow("timeout") << true;
+}
+void PreUploadProcessorTest::cancelsProcessTree()
+{
+    QFETCH(bool, timeout);
+    QTemporaryDir dir;
+    const auto source = writeTempFile(dir, QStringLiteral("source.txt"), "original");
+    const auto marker = dir.filePath(QStringLiteral("child-started"));
+    const auto escaped = dir.filePath(QStringLiteral("child-survived"));
+    const QString child = QStringLiteral("import pathlib,sys,time; pathlib.Path(sys.argv[1]).write_text('ready'); time.sleep(1); pathlib.Path(sys.argv[2]).write_text('escaped')");
+    const QJsonObject config{{QStringLiteral("preUpload"), QJsonArray{QJsonObject{
+        {QStringLiteral("mime"), QJsonArray{QStringLiteral("*/*")}},
+        {QStringLiteral("fileHandling"), QStringLiteral("inplace_copy")},
+        {QStringLiteral("timeoutMs"), timeout ? 300 : 30000},
+        {QStringLiteral("commands"), QJsonArray{commandObject({pythonExecutable(), QStringLiteral("-c"),
+            QStringLiteral("import subprocess,sys,time; subprocess.Popen([sys.executable,'-c',sys.argv[1],sys.argv[2],sys.argv[3]]); time.sleep(10)"), child, marker, escaped, QStringLiteral("${FILE}")})}}}}}};
+    ParsedPreUploadConfig parsed;
+    QVERIFY(TargetPreUploadConfigParser::parse(config, &parsed));
+    auto context = std::make_unique<QObject>();
+    bool completed = false;
+    PreUploadProcessor::preprocessFileAsync(parsed, source, context.get(), [&](auto) { completed = true; });
+    QTRY_VERIFY(QFileInfo::exists(marker));
+    if (timeout) QTRY_VERIFY(completed);
+    else context.reset();
+    QTest::qWait(1100);
+    QCOMPARE(completed, timeout);
+    QVERIFY(!QFileInfo::exists(escaped));
 }
 
 QTEST_GUILESS_MAIN(PreUploadProcessorTest)

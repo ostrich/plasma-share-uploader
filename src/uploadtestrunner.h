@@ -23,17 +23,18 @@ signals:
     void previewChanged();
     void previewReady(const QString &path);
 private:
+    void staged(const ParsedTargetConfig &config, bool previewOnly, quint64 run);
     void prepare(const ParsedTargetConfig &config, bool previewOnly, const CredentialStore::Values &values, quint64 run);
     void finish(quint64 run);
     bool current(quint64 run) const { return busy() && run == m_generation; }
     quint64 m_generation = 0;
     QString m_previewPath;
     // Completing or cancelling returns to Idle; prepared previews remain owned separately.
-    enum class Phase { Idle, ResolvingCredentials, Preprocessing, Uploading };
+    enum class Phase { Idle, Staging, ResolvingCredentials, Preprocessing, Uploading };
     Phase m_phase = Phase::Idle;
     CredentialStore *m_credentials;
     QPointer<QObject> m_run;
-    std::unique_ptr<QTemporaryDir> m_stage;
+    std::shared_ptr<QTemporaryDir> m_stage;
     PreUploadProcessor::Result m_prepared;
     QString m_file;
     QStringList m_secrets;

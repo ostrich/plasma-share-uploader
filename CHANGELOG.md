@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.0.1
+
+- Make upload, preprocessing, credential, and editor workflows explicit; prevent
+  stale callbacks from affecting replacement operations and release preview files
+  on reset.
+- Stage files in background workers while preserving temporary inputs. Sharing
+  jobs expose progress and cancellation, including during staging.
+- Limit upload responses to 1 MiB and command diagnostics to 64 KiB per stream.
+  Redact known credentials from production errors and response metadata.
+- Terminate preprocessing process groups on cancellation, timeout, and command
+  completion. Expand command placeholders once so literal filename text survives.
+- Prevent exports into managed target directories through directory symlinks and
+  redact sensitive values containing mixed literal text and credential references.
+- Clear obsolete form errors, cache draft validation, and reduce repeated target
+  scans when generating IDs. Select a diagnostic to open its tab and focus its field.
+- Add regression coverage for cancellation, subprocess cleanup, response limits,
+  secret redaction, export safeguards, placeholder filenames, and issue navigation.
+
+The target format remains schemaVersion 1; existing 1.0.0 definitions need no migration.
+
 ## 1.0.0
 
 Replaced the configuration window and Share picker with Qt Quick/QML interfaces,

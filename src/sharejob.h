@@ -32,7 +32,8 @@ private:
     void cleanupTempArtifacts();
     void finishCancelled();
     void finishError(const QString &message);
-    QString stageInputFiles();
+    bool doKill() override;
+    void stageInputFiles();
 
     ParsedTargetConfig m_targetConfig;
     TargetUploader m_uploader;
@@ -40,7 +41,10 @@ private:
     QStringList m_originalFiles;
     QList<UploadResult> m_uploadResults;
     QStringList m_uploadedUrls;
-    std::unique_ptr<QTemporaryDir> m_staging;
+    QStringList m_secretValues;
+    std::shared_ptr<QTemporaryDir> m_staging;
+    QPointer<QObject> m_copying;
+    QPointer<QNetworkReply> m_reply;
     PreUploadProcessor::Result m_prepared;
     QPointer<QObject> m_preprocessing;
     QPointer<TargetPickerDialog> m_picker;

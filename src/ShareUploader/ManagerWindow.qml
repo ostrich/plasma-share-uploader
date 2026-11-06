@@ -9,6 +9,65 @@ ApplicationWindow {
     property bool allowClose: false
     required property TargetManagerController controller
 
+    function findControl(parentItem, name) {
+        if (parentItem.objectName === name && parentItem.visible) return parentItem;
+        for (const child of parentItem.children) {
+            const found = findControl(child, name);
+            if (found) return found;
+        }
+        return null;
+    }
+    function focusControl(control) {
+        if (!control || !control.visible || !control.enabled) return false;
+        if (typeof control.selectAll !== "function") {
+            for (const child of control.children)
+                if (focusControl(child)) return true;
+        }
+        if (!control.activeFocusOnTab) return false;
+        control.forceActiveFocus();
+        for (let ancestor = control.parent; ancestor; ancestor = ancestor.parent) {
+            if (ancestor.contentItem && ancestor.contentY !== undefined && ancestor.contentHeight !== undefined) {
+                const point = control.mapToItem(ancestor.contentItem, 0, 0);
+                ancestor.contentY = Math.max(0, Math.min(point.y, ancestor.contentHeight - ancestor.height));
+            }
+        }
+        return true;
+    }
+    function navigateIssue(tab, path) {
+        tabs.currentIndex = tab;
+        if (path[0] === "preUpload" && path.length > 1) {
+            const rules = findControl(root.contentItem, "preRules");
+            if (rules) rules.currentIndex = Number(path[1]);
+        }
+        Qt.callLater(function () {
+            if (path[0] === "preUpload" && path[2] === "commands" && path.length > 3) {
+                const commands = findControl(root.contentItem, "preCommands");
+                if (commands) commands.currentIndex = Number(path[3]);
+            }
+            Qt.callLater(function () {
+                if (path.join("/").startsWith("request/body/value")
+                    && focusControl(findControl(root.contentItem, "jsonBody"))) return;
+                for (let length = path.length; length > 0; --length) {
+                    const name = path.slice(0, length).join(".");
+                    const control = findControl(root.contentItem, name);
+                    if (control && control.rows) {
+                        const row = control.rows.fieldRow(path[length] || "");
+                        const list = findControl(control, name + ".rows");
+                        if (row >= 0 && list) {
+                            list.positionViewAtIndex(row, ListView.Contain);
+                            const column = control.rows.map && length === path.length ? ".name." : ".value.";
+                            Qt.callLater(function () { focusControl(findControl(control, name + column + row)); });
+                            return;
+                        }
+                    }
+                    if (focusControl(control)) return;
+                }
+                tabs.currentIndex = 5;
+                focusControl(findControl(root.contentItem, "targetJson"));
+            });
+        });
+    }
+
     height: 860
     minimumHeight: 720
     minimumWidth: 960
@@ -42,6 +101,7 @@ ApplicationWindow {
             // Finish the original closing event before retrying an approved close.
             Qt.callLater(root.close);
         }
+        function onFocusIssue(tab, path) { root.navigateIssue(tab, path); }
         function onShowTab(index) {
             tabs.currentIndex = index;
         }

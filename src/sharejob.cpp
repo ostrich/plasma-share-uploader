@@ -1,4 +1,5 @@
 #include "sharejob.h"
+#include "asyncfilecopy.h"
 
 #include "constraintmatcher.h"
 #include "shareinpututils.h"
@@ -51,6 +52,7 @@ ShareJob::ShareJob(const QByteArray &configJson, QObject *parent, CredentialStor
     , m_uploader()
     , m_credentials(credentials ? credentials : new CredentialStore(this))
 {
+    setCapabilities(KJob::Killable);
     const QJsonObject configObject = QJsonDocument::fromJson(configJson).object();
     if (!configObject.isEmpty()) {
         QList<TargetDiagnostic> diagnostics;
@@ -65,6 +67,7 @@ ShareJob::~ShareJob()
         m_picker->disconnect(this);
         delete m_picker.data();
     }
+    delete m_copying.data();
     delete m_preprocessing.data();
 }
 
@@ -77,24 +80,18 @@ void ShareJob::start()
     m_pickerParent = invokingWindow();
     // Purpose callers may remove their temporary input as soon as start() returns.
     m_originalFiles = collectSharedFilePaths(data());
-    const QString error = m_originalFiles.isEmpty()
-        ? QStringLiteral("No local files found to upload.") : stageInputFiles();
-    // Purpose sets its Running state after calling start(), so completion must be deferred.
-    QTimer::singleShot(0, this, [this, error]() {
-        if (!error.isEmpty()) {
-            finishError(error);
-        } else if (m_targetConfig.core.id.isEmpty()) {
-            selectTarget();
-        } else {
-            prepareTarget();
-        }
-    });
+    if (m_originalFiles.isEmpty()) {
+        QTimer::singleShot(0, this, [this]() { finishError(QStringLiteral("No local files found to upload.")); });
+        return;
+    }
+    stageInputFiles();
 }
 
 void ShareJob::prepareTarget()
 {
     Q_ASSERT(m_phase == Phase::Staging || m_phase == Phase::SelectingTarget);
     m_phase = Phase::ResolvingCredentials;
+    m_secretValues = CredentialStore::secretValues(m_targetConfig.request, {});
     const auto missing = CredentialStore::missingEnvironment(m_targetConfig.request);
     if (!missing.isEmpty()) {
         finishError(QStringLiteral("Missing environment values: %1").arg(missing.join(QStringLiteral(", "))));
@@ -106,6 +103,7 @@ void ShareJob::prepareTarget()
             if (!error.isEmpty()) { finishError(error); return; }
             m_uploader.setConfig(m_targetConfig);
             m_uploader.setSecrets(values);
+            m_secretValues = CredentialStore::secretValues(m_targetConfig.request, values);
             startNextUpload();
         });
 }
@@ -194,9 +192,20 @@ void ShareJob::uploadPreparedFile()
         return;
     }
 
+    m_reply = reply;
+    connect(reply, &QNetworkReply::uploadProgress, this, [this](qint64 sent, qint64 total) {
+        if (total > 0) setPercent(20 + 80 * (m_nextIndex + double(sent) / total) / m_files.size());
+    });
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         if (m_phase != Phase::Uploading) { reply->deleteLater(); return; }
-        const UploadResult result = m_uploader.parseReply(reply);
+        UploadResult result = m_uploader.parseReply(reply);
+        result.errorMessage = CredentialStore::redact(result.errorMessage, m_secretValues);
+        result.responseInfo.responseText = CredentialStore::redact(result.responseInfo.responseText, m_secretValues);
+        result.responseInfo.responseUrl = CredentialStore::redact(result.responseInfo.responseUrl, m_secretValues);
+        result.responseInfo.reasonPhrase = CredentialStore::redact(result.responseInfo.reasonPhrase, m_secretValues);
+        for (auto it = result.responseInfo.headers.begin(); it != result.responseInfo.headers.end(); ++it)
+            it.value() = it.key().compare(QStringLiteral("set-cookie"), Qt::CaseInsensitive) == 0
+                ? QStringLiteral("[redacted]") : CredentialStore::redact(it.value().toString(), m_secretValues);
         reply->deleteLater();
 
         if (!result.ok) {
@@ -213,13 +222,14 @@ void ShareJob::uploadPreparedFile()
 
 void ShareJob::finishError(const QString &message)
 {
+    const auto safeMessage = CredentialStore::redact(message, m_secretValues);
     if (m_phase == Phase::Finished) return;
     m_phase = Phase::Finished;
     setError(1);
     publishResults();
-    const QString details = m_uploadedUrls.isEmpty() ? message
+    const QString details = m_uploadedUrls.isEmpty() ? safeMessage
         : QStringLiteral("%1\nUploaded %2 of %3 files before the failure. Completed URLs copied to clipboard.")
-              .arg(message).arg(m_uploadedUrls.size()).arg(m_files.size());
+              .arg(safeMessage).arg(m_uploadedUrls.size()).arg(m_files.size());
     setErrorText(details);
     KNotification::event(KNotification::Error,
                          QStringLiteral("%1 Upload Failed").arg(m_uploader.displayName()),
@@ -245,31 +255,34 @@ void ShareJob::cleanupTempArtifacts()
     m_staging.reset();
 }
 
-QString ShareJob::stageInputFiles()
+void ShareJob::stageInputFiles()
 {
-    m_files.clear();
-    m_staging = std::make_unique<QTemporaryDir>(QDir::tempPath() + QStringLiteral("/plasma-share-staging-XXXXXX"));
-    if (!m_staging->isValid()) {
-        return QStringLiteral("Failed to create temporary directory for upload staging.");
-    }
-    const QString stagingRoot = m_staging->path();
+    m_staging = std::make_shared<QTemporaryDir>(QDir::tempPath() + QStringLiteral("/plasma-share-staging-XXXXXX"));
+    m_copying = AsyncFileCopy::start(m_originalFiles, m_staging, this, [this](AsyncFileCopy::Result result) {
+        m_copying.clear();
+        if (m_phase != Phase::Staging) return;
+        if (!result.error.isEmpty()) { finishError(result.error); return; }
+        m_files = result.files;
+        setPercent(20);
+        if (m_phase != Phase::Staging) return;
+        if (m_targetConfig.core.id.isEmpty()) selectTarget();
+        else prepareTarget();
+    }, [this](qint64 copied, qint64 total) {
+        if (total > 0) setPercent(20.0 * copied / total);
+    });
+}
 
-    for (int i = 0; i < m_originalFiles.size(); ++i) {
-        const QString originalPath = m_originalFiles.at(i);
-        const QFileInfo originalInfo(originalPath);
-        const QString subdirPath = QDir(stagingRoot).filePath(QString::number(i));
-        if (!QDir().mkpath(subdirPath)) {
-            return QStringLiteral("Failed to prepare temporary upload staging directory.");
-        }
-
-        const QString stagedPath = QDir(subdirPath).filePath(originalInfo.fileName());
-        if (!QFile::copy(originalPath, stagedPath)) {
-            return QStringLiteral("Failed to prepare temporary upload copy for %1").arg(originalPath);
-        }
-        m_files.append(stagedPath);
-    }
-
-    return {};
+bool ShareJob::doKill()
+{
+    if (m_phase == Phase::Finished) return false;
+    m_phase = Phase::Finished;
+    if (m_picker) { m_picker->disconnect(this); delete m_picker.data(); }
+    delete m_copying.data();
+    delete m_preprocessing.data();
+    if (m_reply) { m_reply->disconnect(this); m_reply->abort(); m_reply->deleteLater(); }
+    publishResults();
+    cleanupTempArtifacts();
+    return true;
 }
 
 void ShareJob::selectTarget()

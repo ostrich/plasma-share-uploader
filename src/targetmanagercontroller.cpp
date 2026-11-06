@@ -19,6 +19,8 @@ TargetManagerController::TargetManagerController(
     , m_test(&m_draft, m_credentialStore, this)
     , m_watcher(this)
 {
+    connect(this, &TargetManagerController::changed, this, &TargetManagerController::selectedIndexChanged);
+    connect(&m_targets, &QAbstractItemModel::modelReset, this, &TargetManagerController::selectedIndexChanged);
     connect(&m_draft, &TargetDraft::edited, this, [this]() {
         if (m_editState != EditState::Loading) {
             m_editState = EditState::Dirty;
@@ -456,9 +458,13 @@ void TargetManagerController::exportFile(const QUrl& url)
     if (!url.isLocalFile() || bytes.isEmpty())
         return;
     const auto path = url.toLocalFile();
-    const auto absolute = QFileInfo(path).absoluteFilePath();
-    if (QFileInfo(path).isSymLink() || absolute.startsWith(m_store.activePath() + QLatin1Char('/'))
-        || absolute.startsWith(m_store.bundledPath() + QLatin1Char('/'))) {
+    const auto parent = QFileInfo(QFileInfo(path).absolutePath()).canonicalFilePath();
+    const auto absolute = QDir(parent).filePath(QFileInfo(path).fileName());
+    const auto active = QFileInfo(m_store.activePath()).canonicalFilePath();
+    const auto bundled = QFileInfo(m_store.bundledPath()).canonicalFilePath();
+    if (parent.isEmpty() || QFileInfo(path).isSymLink()
+        || (!active.isEmpty() && absolute.startsWith(active + QLatin1Char('/')))
+        || (!bundled.isEmpty() && absolute.startsWith(bundled + QLatin1Char('/')))) {
         emit error(tr("Export to a separate regular file. Use Save to update a configured target."));
         return;
     }
@@ -475,4 +481,32 @@ void TargetManagerController::cancelExport()
 {
     m_export.clear();
     m_exportPhase = ExportPhase::Idle;
+}
+
+QVariantList TargetManagerController::issues() const
+{
+    QVariantList result;
+    for (const auto &message : diagnostics()) {
+        QStringList path;
+        if (message.startsWith(QLatin1Char('/')))
+            path = message.section(QStringLiteral(": "), 0, 0).mid(1).split(QLatin1Char('/'));
+        int tab = 5;
+        if (!path.isEmpty()) {
+            const auto section = path.first();
+            if (section == QLatin1StringView("request")) tab = 1;
+            else if (section == QLatin1StringView("response")) tab = 3;
+            else if (section == QLatin1StringView("preUpload")) tab = 4;
+            else if (section != QLatin1StringView("schemaVersion")) tab = 0;
+        }
+        result.append(QVariantMap{{QStringLiteral("message"), message},
+                                  {QStringLiteral("path"), path}, {QStringLiteral("tab"), tab}});
+    }
+    return result;
+}
+void TargetManagerController::activateIssue(int index)
+{
+    const auto list = issues();
+    if (index < 0 || index >= list.size()) return;
+    const auto issue = list.at(index).toMap();
+    emit focusIssue(issue.value(QStringLiteral("tab")).toInt(), issue.value(QStringLiteral("path")).toStringList());
 }

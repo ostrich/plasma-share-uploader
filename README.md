@@ -17,6 +17,11 @@ After installing, restart Dolphin or Gwenview, then:
 2. Open **Share → Upload To…** and choose a target.
 3. The resulting links are copied to the clipboard when the uploads finish.
 
+Input files are opened immediately and copied in a background worker. Hosts that
+expose job progress and cancellation can cancel staging or an active upload.
+Cancellation retains links for files already uploaded; it cannot undo a remote upload.
+Responses are limited to 1 MiB for both sharing and test uploads.
+
 The picker shows targets that accept all selected files. Use **Configure…** to
 manage targets and **Reload** to pick up changes without starting a new share.
 

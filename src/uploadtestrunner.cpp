@@ -1,4 +1,5 @@
 #include "uploadtestrunner.h"
+#include "asyncfilecopy.h"
 #include "constraintmatcher.h"
 #include "targetfilestore.h"
 #include <QFile>
@@ -25,21 +26,35 @@ void UploadTestRunner::start(const QJsonObject &object, const QString &file, boo
     const auto previous = m_generation;
     clearPreview();
     if (busy() || previous != m_generation) return;
-    m_prepared = {}; m_secrets.clear(); m_stage = std::make_unique<QTemporaryDir>();
+    m_prepared = {}; m_secrets.clear(); m_stage = std::make_shared<QTemporaryDir>();
     if (!m_stage->isValid()) { emit message(tr("Could not create a test directory.")); return; }
-    m_file = m_stage->filePath(file.isEmpty() ? QStringLiteral("test.png") : QFileInfo(file).fileName());
-    if (file.isEmpty()) {
-        QImage sample(32, 32, QImage::Format_RGB32); sample.fill(QColor(70, 110, 170));
-        if (!sample.save(m_file)) { emit message(tr("Could not create the test image.")); return; }
-    } else if (!QFile::copy(file, m_file)) { emit message(tr("Could not copy the selected file for testing.")); return; }
-    if (!previewOnly && ConstraintMatcher::filterTargets({TargetDefinition{config}}, {m_file}).isEmpty()) {
-        emit message(tr("The sample does not match this target's file constraints.")); return;
-    }
     const auto run = ++m_generation;
     m_run = new QObject(this);
-    m_phase = previewOnly ? Phase::Preprocessing : Phase::ResolvingCredentials;
+    m_phase = Phase::Staging;
     emit busyChanged(true);
-    if (!current(run)) return; // Signals may cancel and start a replacement run.
+    if (!current(run)) return;
+    if (file.isEmpty()) {
+        m_file = m_stage->filePath(QStringLiteral("test.png"));
+        QImage sample(32, 32, QImage::Format_RGB32); sample.fill(QColor(70, 110, 170));
+        if (!sample.save(m_file)) { emit message(tr("Could not create the test image.")); finish(run); return; }
+        staged(config, previewOnly, run);
+    } else {
+        AsyncFileCopy::start({file}, m_stage, m_run, [this, config, previewOnly, run](AsyncFileCopy::Result result) {
+            if (!current(run)) return;
+            if (!result.error.isEmpty()) { emit message(result.error); finish(run); return; }
+            m_file = result.files.first();
+            staged(config, previewOnly, run);
+        });
+    }
+}
+
+void UploadTestRunner::staged(const ParsedTargetConfig &config, bool previewOnly, quint64 run)
+{
+    if (!current(run)) return;
+    if (!previewOnly && ConstraintMatcher::filterTargets({TargetDefinition{config}}, {m_file}).isEmpty()) {
+        emit message(tr("The sample does not match this target's file constraints.")); finish(run); return;
+    }
+    m_phase = previewOnly ? Phase::Preprocessing : Phase::ResolvingCredentials;
     if (previewOnly) prepare(config, true, {}, run);
     else {
         emit message(tr("Resolving credentials..."));
@@ -83,18 +98,12 @@ void UploadTestRunner::prepare(const ParsedTargetConfig &config, bool previewOnl
             auto *network = new QNetworkAccessManager(m_run);
             auto *reply = uploader->upload(m_prepared.uploadPath, network);
             if (!reply) { emit message(uploader->lastError()); finish(run); return; }
-            constexpr qint64 limit = 1024 * 1024;
-            reply->setReadBufferSize(limit + 1);
-            connect(reply, &QNetworkReply::readyRead, m_run, [reply]() {
-                if (reply->bytesAvailable() > limit) { reply->setProperty("responseTooLarge", true); reply->abort(); }
-            });
             connect(reply, &QNetworkReply::uploadProgress, m_run, [this, run](qint64 sent, qint64 total) {
                 if (current(run)) emit progress(sent, total);
             });
             connect(reply, &QNetworkReply::finished, m_run, [this, reply, uploader, run]() {
                 if (!current(run)) return;
                 auto result = uploader->parseReply(reply);
-                if (reply->property("responseTooLarge").toBool()) { result.ok = false; result.errorMessage = tr("Test stopped: response exceeds 1 MiB."); }
                 result.url = CredentialStore::redact(result.url, m_secrets);
                 result.thumbnailUrl = CredentialStore::redact(result.thumbnailUrl, m_secrets);
                 result.deletionUrl = CredentialStore::redact(result.deletionUrl, m_secrets);

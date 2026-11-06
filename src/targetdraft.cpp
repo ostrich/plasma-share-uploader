@@ -3,7 +3,18 @@
 #include "targetfilestore.h"
 #include <QJsonDocument>
 
-QStringList TargetDraft::problems() const { return TargetFileStore::validate(m_bytes) + m_errors.values(); }
+QStringList TargetDraft::problems() const
+{
+    if (m_validatedRevision != m_revision) {
+        m_cachedProblems = TargetFileStore::validate(m_bytes);
+        m_validatedRevision = m_revision;
+    }
+    QStringList errors;
+    for (auto it = m_errors.cbegin(); it != m_errors.cend(); ++it)
+        errors.append((it.key() == QLatin1StringView("jsonBody") ? QStringLiteral("/request/body/value") : QLatin1Char('/') + it.key())
+                      + QStringLiteral(": ") + it.value());
+    return m_cachedProblems + errors;
+}
 void TargetDraft::load(const QByteArray& bytes)
 {
     m_bytes = bytes;

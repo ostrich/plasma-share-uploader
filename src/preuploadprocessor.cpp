@@ -1,4 +1,5 @@
 #include "preuploadprocessor.h"
+#include "asyncfilecopy.h"
 
 #include "targetpreuploadconfigparser.h"
 
@@ -11,6 +12,8 @@
 #include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QTimer>
+#include <csignal>
+#include <unistd.h>
 
 namespace {
 constexpr int kDefaultPreUploadTimeoutMs = 30000;
@@ -31,10 +34,17 @@ bool mimeMatchesPattern(const QString &mimeType, const QString &pattern)
 
 QString substituteCommandArg(const QString &arg, const QString &filePath, const QString &outFilePath)
 {
-    QString result = arg;
-    result.replace(QStringLiteral("${FILE}"), filePath);
-    result.replace(QStringLiteral("${OUT_FILE}"), outFilePath);
-    return result;
+    static const QRegularExpression placeholders(QStringLiteral(R"(\$\{(FILE|OUT_FILE)\})"));
+    QString result;
+    qsizetype offset = 0;
+    auto matches = placeholders.globalMatch(arg);
+    while (matches.hasNext()) {
+        const auto match = matches.next();
+        result += arg.mid(offset, match.capturedStart() - offset);
+        result += match.captured(1) == QLatin1StringView("FILE") ? filePath : outFilePath;
+        offset = match.capturedEnd();
+    }
+    return result + arg.mid(offset);
 }
 
 QString formatCommand(const QStringList &argv)
@@ -86,11 +96,15 @@ public:
                    QObject *context, std::function<void(PreUploadProcessor::Result)> completed)
         : QObject(context), m_completed(std::move(completed))
     {
+        m_process.setUnixProcessParameters(QProcess::UnixProcessFlag::CreateNewSession);
+        connect(&m_process, &QProcess::started, this, [this]() { m_processGroup = m_process.processId(); });
+        connect(&m_process, &QProcess::readyReadStandardOutput, this, [this]() { drainOutput(); });
+        connect(&m_process, &QProcess::readyReadStandardError, this, [this]() { drainOutput(); });
         m_timeout.setSingleShot(true);
         connect(&m_timeout, &QTimer::timeout, this, [this]() {
             if (m_phase != Phase::RunningCommand) return;
             m_phase = Phase::StoppingTimedOutCommand;
-            m_process.kill();
+            stopProcessTree();
         });
         connect(&m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
             if (m_phase == Phase::Finished) return;
@@ -101,12 +115,14 @@ public:
         connect(&m_process, &QProcess::finished, this, [this](int exitCode, QProcess::ExitStatus status) {
             if (m_phase == Phase::Finished) return;
             m_timeout.stop();
+            stopProcessTree();
+            drainOutput();
             if (m_phase == Phase::StoppingTimedOutCommand) {
                 finish(QStringLiteral("Pre-upload command timed out: %1").arg(formatCommand(m_argv)));
                 return;
             }
-            const QString stdErr = QString::fromUtf8(m_process.readAllStandardError()).trimmed();
-            const QString stdOut = QString::fromUtf8(m_process.readAllStandardOutput()).trimmed();
+            const QString stdErr = outputText(m_stderr, m_stderrTruncated);
+            const QString stdOut = outputText(m_stdout, m_stdoutTruncated);
             if (status != QProcess::NormalExit || exitCode != 0) {
                 const QString details = !stdErr.isEmpty() ? stdErr : stdOut;
                 finish(details.isEmpty() ? QStringLiteral("Pre-upload command failed: %1").arg(formatCommand(m_argv)) : details);
@@ -121,13 +137,36 @@ public:
     {
         // Stop the writer before the owned temporary directory is removed.
         m_process.disconnect(this);
+        stopProcessTree();
         if (m_process.state() != QProcess::NotRunning) {
-            m_process.kill();
             m_process.waitForFinished(1000);
         }
     }
 
 private:
+    void stopProcessTree()
+    {
+        if (m_processGroup > 0) {
+            ::kill(-pid_t(m_processGroup), SIGKILL);
+            m_processGroup = 0;
+        }
+        if (m_process.state() != QProcess::NotRunning) m_process.kill();
+    }
+    void drainOutput()
+    {
+        auto append = [](QByteArray &tail, bool &truncated, const QByteArray &bytes) {
+            constexpr qsizetype limit = 64 * 1024;
+            tail += bytes;
+            if (tail.size() > limit) { tail = tail.right(limit); truncated = true; }
+        };
+        append(m_stdout, m_stdoutTruncated, m_process.readAllStandardOutput());
+        append(m_stderr, m_stderrTruncated, m_process.readAllStandardError());
+    }
+    static QString outputText(const QByteArray &tail, bool truncated)
+    {
+        return (truncated ? QStringLiteral("[earlier command output truncated]\n") : QString())
+            + QString::fromUtf8(tail).trimmed();
+    }
     void prepare(const ParsedPreUploadConfig &config, const QString &filePath)
     {
         Q_ASSERT(m_phase == Phase::Scheduled);
@@ -164,15 +203,12 @@ private:
         m_result.tempDirPath = m_result.tempDir->path();
         const QString tempFilePath = QDir(m_result.tempDirPath).filePath(QFileInfo(filePath).fileName());
         if (m_rule.fileHandling == PreUploadFileHandling::InplaceCopy) {
-            if (!QFile::copy(filePath, tempFilePath)) {
-                finish(QStringLiteral("Failed to create temporary copy for %1").arg(filePath));
-                return;
-            }
-            if (!QFile::setPermissions(tempFilePath, QFile::permissions(tempFilePath) | QFileDevice::WriteOwner)) {
-                finish(QStringLiteral("Failed to make temporary upload copy writable."));
-                return;
-            }
-            m_result.uploadPath = tempFilePath;
+            AsyncFileCopy::start({filePath}, m_result.tempDir, this, [this](AsyncFileCopy::Result result) {
+                if (!result.error.isEmpty()) { finish(result.error); return; }
+                m_result.uploadPath = result.files.first();
+                runNextCommand();
+            });
+            return;
         } else if (m_rule.fileHandling == PreUploadFileHandling::OutputFile) {
             m_outFilePath = tempFilePath;
         } else {
@@ -205,6 +241,8 @@ private:
             finish(QStringLiteral("Pre-upload command is empty."));
             return;
         }
+        m_stdout.clear(); m_stderr.clear();
+        m_stdoutTruncated = m_stderrTruncated = false;
         m_phase = Phase::RunningCommand;
         m_process.start(m_argv.first(), m_argv.mid(1));
         m_timeout.start(m_rule.timeoutMs > 0 ? m_rule.timeoutMs : kDefaultPreUploadTimeoutMs);
@@ -237,6 +275,9 @@ private:
     int m_nextCommand = 0;
     enum class Phase { Scheduled, Preparing, RunningCommand, StoppingTimedOutCommand, Finished };
     Phase m_phase = Phase::Scheduled;
+    QByteArray m_stdout, m_stderr;
+    bool m_stdoutTruncated = false, m_stderrTruncated = false;
+    qint64 m_processGroup = 0;
     QProcess m_process;
     QTimer m_timeout;
 };

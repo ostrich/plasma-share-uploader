@@ -44,6 +44,7 @@ void JsonRowsModel::setDraft(TargetDraft* draft)
 {
     if (m_draft == draft)
         return;
+    if (m_draft) m_draft->setFormError(m_path.join(QLatin1Char('/')), {});
     if (m_draft)
         disconnect(m_draft, nullptr, this, nullptr);
     m_draft = draft;
@@ -77,6 +78,7 @@ void JsonRowsModel::setPath(const QStringList& path)
 {
     if (m_path == path)
         return;
+    if (m_draft) m_draft->setFormError(m_path.join(QLatin1Char('/')), {});
     m_path = path;
     reload();
     emit sourceChanged();
@@ -91,8 +93,10 @@ void JsonRowsModel::setMap(bool map)
 }
 void JsonRowsModel::reload()
 {
-    if (m_draft)
+    if (m_draft) {
         assign(ConfigJson::get(m_draft->document(), m_path));
+        m_draft->setFormError(m_path.join(QLatin1Char('/')), error());
+    }
 }
 void JsonRowsModel::assign(const QJsonValue& value)
 {
@@ -195,4 +199,20 @@ void JsonRowsModel::move(int row, int delta)
     m_rows.move(row, to);
     endMoveRows();
     publish();
+}
+
+int JsonRowsModel::fieldRow(const QString &field) const
+{
+    if (!m_map) {
+        bool ok = false;
+        const auto row = field.toInt(&ok);
+        return ok && row >= 0 && row < count() ? row : (count() ? 0 : -1);
+    }
+    QSet<QString> seen;
+    for (int row = 0; row < count(); ++row) {
+        const auto name = m_rows.at(row).first;
+        if ((!field.isEmpty() && name == field) || (field.isEmpty() && (name.isEmpty() || seen.contains(name)))) return row;
+        seen.insert(name);
+    }
+    return count() ? 0 : -1;
 }

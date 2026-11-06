@@ -1,4 +1,5 @@
 set(IMSHARE_CORE_SOURCES
+    asyncfilecopy.cpp
     credentialstore.cpp
     constraintmatcher.cpp
     preuploadprocessor.cpp

@@ -98,6 +98,8 @@ private slots:
     void invalidDefinitionsDoNotBlockValidTargets();
     void listResetExposesOldDataBeforeReplacement();
     void managerPresetAndDraftActions();
+    void reviewRegressionCases();
+    void productionDiagnosticsAreRedacted();
     void runnerReplacementSurvivesSignals_data();
     void runnerReplacementSurvivesSignals();
     void runnerIgnoresRetiredCredentialCallbacks();
@@ -901,6 +903,90 @@ void TargetManagerTest::resettingPreviewRemovesOwnedFiles()
     controller.reset();
     QVERIFY(controller.preview().isEmpty());
     QVERIFY(!QFileInfo::exists(second));
+}
+
+void TargetManagerTest::reviewRegressionCases()
+{
+    for (const auto &secret : { QStringLiteral("${ENV:USER}:literal-password"),
+                              QStringLiteral("${WALLET:broken"), QStringLiteral("Bearer ${WALLET:key} suffix") }) {
+        auto object = target();
+        auto request = object.value(QStringLiteral("request")).toObject();
+        request.insert(QStringLiteral("headers"), QJsonObject{{QStringLiteral("Authorization"), secret}});
+        object.insert(QStringLiteral("request"), request);
+        QStringList replaced;
+        const auto exported = TargetFileStore::portable(object, &replaced);
+        QVERIFY(!QJsonDocument(exported).toJson().contains(secret.toUtf8()));
+        QVERIFY(!replaced.isEmpty());
+    }
+    TargetDraft draft;
+    draft.load(QJsonDocument(target()).toJson());
+    QVERIFY(draft.problems().isEmpty());
+    draft.setBodyType(QStringLiteral("multipart"));
+    JsonRowsModel fields;
+    fields.setMap(true);
+    fields.setPath({QStringLiteral("request"), QStringLiteral("body"), QStringLiteral("fields")});
+    fields.setDraft(&draft);
+    fields.append(QStringLiteral("value"));
+    QVERIFY(draft.hasFormErrors());
+    draft.setBodyType(QStringLiteral("raw"));
+    QVERIFY(!draft.hasFormErrors());
+    QVERIFY(draft.problems().isEmpty());
+    draft.setRawText(QStringLiteral("{broken"));
+    QVERIFY(!draft.problems().isEmpty());
+    draft.load(QJsonDocument(target()).toJson());
+    QVERIFY(draft.problems().isEmpty());
+
+    QTemporaryDir active, presets, transfer;
+    const auto bytes = QJsonDocument(target()).toJson();
+    const auto original = active.filePath(QStringLiteral("raw.json"));
+    writeBytes(original, bytes);
+    QVERIFY(QFile::link(active.path(), transfer.filePath(QStringLiteral("alias"))));
+    TargetManagerController manager(presets.path(), active.path());
+    QSignalSpy errors(&manager, &TargetManagerController::error);
+    manager.request(QStringLiteral("export"));
+    manager.acceptExport(QStringLiteral("{\"id\":\"overwrite\"}"));
+    manager.exportFile(QUrl::fromLocalFile(transfer.filePath(QStringLiteral("alias/raw.json"))));
+    QCOMPARE(errors.size(), 1);
+    QCOMPARE(readBytes(original), bytes);
+}
+
+void TargetManagerTest::productionDiagnosticsAreRedacted()
+{
+    const auto previous = qgetenv("IMSHARE_REDACTION_TEST");
+    qputenv("IMSHARE_REDACTION_TEST", "environment-secret");
+    const auto restore = qScopeGuard([previous]() {
+        if (previous.isNull()) qunsetenv("IMSHARE_REDACTION_TEST");
+        else qputenv("IMSHARE_REDACTION_TEST", previous);
+    });
+    HttpCaptureServer server;
+    QVERIFY(server.start());
+    auto object = target(server.url());
+    auto request = object.value(QStringLiteral("request")).toObject();
+    request.insert(QStringLiteral("headers"), QJsonObject{{QStringLiteral("Authorization"), QStringLiteral("Bearer ${WALLET:demo}")}, {QStringLiteral("X-Token"), QStringLiteral("${ENV:IMSHARE_REDACTION_TEST}")}});
+    object.insert(QStringLiteral("request"), request);
+    auto response = object.value(QStringLiteral("response")).toObject();
+    response.insert(QStringLiteral("error"), QJsonObject{{QStringLiteral("type"), QStringLiteral("text_url")}});
+    object.insert(QStringLiteral("response"), response);
+    MemoryCredentials credentials;
+    credentials.values.insert(QStringLiteral("demo"), QStringLiteral("private-token"));
+    QTemporaryDir files;
+    const auto file = writeTempFile(files, QStringLiteral("test.txt"), QByteArray("data"));
+    for (bool success : {false, true}) {
+        server.enqueueResponse({success ? 200 : 400, "OK", "text/plain", {{"X-Echo", "private-token environment-secret"}, {"Set-Cookie", "cookie-secret"}},
+            success ? QByteArray("https://example.test/share") : QByteArray("invalid private-token environment-secret")});
+        ShareJob job(QJsonDocument(object).toJson(), nullptr, &credentials);
+        job.setAutoDelete(false);
+        job.setData(QJsonObject{{QStringLiteral("url"), QUrl::fromLocalFile(file).toString()}});
+        QSignalSpy done(&job, &KJob::result);
+        job.start();
+        QTRY_COMPARE(done.size(), 1);
+        QVERIFY(!job.errorText().contains(QStringLiteral("private-token")));
+        QVERIFY(!job.errorText().contains(QStringLiteral("environment-secret")));
+        QVERIFY(!QJsonDocument(job.output()).toJson().contains("environment-secret"));
+        QVERIFY(!QJsonDocument(job.output()).toJson().contains("private-token"));
+        QVERIFY(!QJsonDocument(job.output()).toJson().contains("cookie-secret"));
+        QCOMPARE(job.error() == 0, success);
+    }
 }
 
 QTEST_MAIN(TargetManagerTest)

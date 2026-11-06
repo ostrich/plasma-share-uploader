@@ -59,6 +59,30 @@ Item {
             mouseClick(tabs.itemAt(index));
             waitForRendering(win.contentItem);
         }
+        function test_diagnosticOpensField() {
+            Fixture.manager.draft.setValue(["request", "url"], "");
+            const issues = Fixture.manager.issues;
+            const index = issues.findIndex(issue => issue.path.join("/") === "request/url");
+            verify(index >= 0);
+            mouseClick(item("targetDiagnostics"));
+            tryCompare(item("diagnosticsDialog"), "opened", true);
+            mouseClick(item("diagnosticIssue." + index));
+            tryCompare(item("editorTabs"), "currentIndex", 1);
+            tryCompare(item("request.url"), "activeFocus", true);
+        }
+        function test_diagnosticOpensTableRow() {
+            Fixture.manager.draft.setBodyType("multipart");
+            tab(1);
+            item("request.body.fields").rows.append("value");
+            const index = Fixture.manager.issues.findIndex(issue => issue.path.join("/") === "request/body/fields");
+            verify(index >= 0);
+            tab(0);
+            mouseClick(item("targetDiagnostics"));
+            tryCompare(item("diagnosticsDialog"), "opened", true);
+            mouseClick(item("diagnosticIssue." + index));
+            tryCompare(item("editorTabs"), "currentIndex", 1);
+            tryCompare(item("request.body.fields.name.0"), "activeFocus", true);
+        }
         function test_addPreprocessingRule() {
             tab(4);
             mouseClick(item("preRules.add"));

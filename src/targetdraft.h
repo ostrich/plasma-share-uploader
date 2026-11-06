@@ -56,4 +56,6 @@ private:
     bool m_editable = true;
     bool m_editingBody = false;
     quint64 m_revision = 0;
+    mutable quint64 m_validatedRevision = ~quint64(0);
+    mutable QStringList m_cachedProblems;
 };

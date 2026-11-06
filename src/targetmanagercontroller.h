@@ -13,12 +13,15 @@ class TargetManagerController : public QObject {
     Q_PROPERTY(TargetListModel* targets READ targets CONSTANT)
     Q_PROPERTY(CredentialController* credentials READ credentials CONSTANT)
     Q_PROPERTY(TestController* test READ test CONSTANT)
+    Q_PROPERTY(int selectedIndex READ selectedIndex NOTIFY selectedIndexChanged)
+    Q_PROPERTY(QString diagnosticNotice READ diagnosticNotice NOTIFY changed)
     Q_PROPERTY(QString selectedPath READ selectedPath NOTIFY changed)
     Q_PROPERTY(QString title READ title NOTIFY changed)
     Q_PROPERTY(QString state READ state NOTIFY changed)
     Q_PROPERTY(bool dirty READ dirty NOTIFY changed)
     Q_PROPERTY(bool hasEntry READ hasEntry NOTIFY changed)
     Q_PROPERTY(QString status READ status NOTIFY changed)
+    Q_PROPERTY(QVariantList issues READ issues NOTIFY changed)
     Q_PROPERTY(QString diagnosticText READ diagnosticText NOTIFY changed)
     Q_PROPERTY(QString message READ message NOTIFY changed)
     Q_PROPERTY(QVariantMap actions READ actions NOTIFY changed)
@@ -31,6 +34,8 @@ public:
     TargetListModel* targets() { return &m_targets; }
     CredentialController* credentials() { return &m_credentials; }
     TestController* test() { return &m_test; }
+    int selectedIndex() const { return m_targets.indexOfPath(m_entry.path); }
+    QString diagnosticNotice() const { return m_notice; }
     QString selectedPath() const { return m_entry.path; }
     QString title() const;
     QString state() const;
@@ -38,6 +43,8 @@ public:
     bool hasEntry() const { return !m_entry.path.isEmpty(); }
     QString status() const;
     QString diagnosticText() const;
+    QVariantList issues() const;
+    Q_INVOKABLE void activateIssue(int index);
     QString message() const { return m_message; }
     QVariantMap actions() const;
     QString search() const { return m_search; }
@@ -53,6 +60,7 @@ public:
     Q_INVOKABLE void acceptExport(const QString& text);
     Q_INVOKABLE void exportFile(const QUrl& url);
 signals:
+    void selectedIndexChanged();
     void changed();
     void filterChanged();
     void error(const QString& text);
@@ -61,6 +69,7 @@ signals:
     void fileDialogRequested(const QString& kind, const QString& name);
     void exportReviewRequested(const QString& text, const QString& replaced);
     void showTab(int index);
+    void focusIssue(int tab, const QStringList &path);
     void closeReady();
 
 private:

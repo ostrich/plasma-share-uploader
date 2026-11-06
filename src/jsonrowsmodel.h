@@ -29,6 +29,7 @@ public:
     QVariant value() const { return jsonValue().toVariant(); }
     QJsonValue jsonValue() const;
     void setValue(const QVariant& value);
+    Q_INVOKABLE int fieldRow(const QString &field) const;
     Q_INVOKABLE void edit(int row, int column, const QString& text);
     Q_INVOKABLE void append(const QVariant& value = QString());
     Q_INVOKABLE void remove(int row);

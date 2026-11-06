@@ -7,10 +7,8 @@ ColumnLayout {
     id: root
 
     required property TargetDraft draft
-    readonly property string kind: {
-        draft.document;
-        return draft.stringValue(path.concat("type"));
-    }
+    readonly property var extractor: path.reduce((value, key) => value == null ? undefined : value[key], draft.document)
+    readonly property string kind: extractor && typeof extractor.type === "string" ? extractor.type : ""
     property bool optional: false
     property bool errorMessage: false
     required property list<string> path
@@ -41,6 +39,7 @@ ColumnLayout {
             textFormat: Text.PlainText
         }
         ComboBox {
+            objectName: root.path.join(".") + ".type"
             Layout.fillWidth: true
             currentIndex: root.types.indexOf(root.kind)
             model: root.optional ? [qsTr("Not configured"), (root.errorMessage ? qsTr("Plain text") : qsTr("Plain URL")), qsTr("JSON pointer"), qsTr("Regular expression"), qsTr("Response header"), qsTr("Redirect URL"), qsTr("XML path")] : [(root.errorMessage ? qsTr("Plain text") : qsTr("Plain URL")), qsTr("JSON pointer"), qsTr("Regular expression"), qsTr("Response header"), qsTr("Redirect URL"), qsTr("XML path")]
@@ -78,11 +77,7 @@ ColumnLayout {
             from: 0
             live: true
             to: 100000
-            value: {
-                root.draft.document;
-                const v = root.draft.value(root.path.concat("group"));
-                return v === undefined ? 1 : v;
-            }
+            value: root.extractor && root.extractor.group !== undefined ? root.extractor.group : 1
             visible: root.kind === "regex"
 
             onValueModified: root.draft.setValue(root.path.concat("group"), value)

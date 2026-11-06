@@ -6,10 +6,8 @@ import QtQuick.Layouts
 FormPage {
     id: root
 
-    readonly property string bodyType: {
-        draft.document;
-        return draft.stringValue(["request", "body", "type"]);
-    }
+    readonly property var request: Object(draft.document).request || ({})
+    readonly property string bodyType: request.body && typeof request.body.type === "string" ? request.body.type : ""
     required property TargetDraft draft
 
     enabled: draft.editable && draft.hasObject
@@ -27,10 +25,8 @@ FormPage {
         textFormat: Text.PlainText
     }
     ComboBox {
-        currentIndex: {
-            root.draft.document;
-            return model.indexOf(root.draft.stringValue(["request", "method"]));
-        }
+        objectName: "request.method"
+        currentIndex: model.indexOf(root.request.method)
         model: ["POST", "PUT"]
 
         onActivated: root.draft.setValue(["request", "method"], currentText)
@@ -42,6 +38,7 @@ FormPage {
     ComboBox {
         id: format
 
+        objectName: "request.body.type"
         readonly property list<string> types: ["multipart", "raw", "form_urlencoded", "json"]
 
         currentIndex: types.indexOf(root.bodyType)

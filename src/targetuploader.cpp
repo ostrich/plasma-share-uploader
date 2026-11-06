@@ -16,6 +16,19 @@
 
 namespace {
 constexpr int kUploadTimeoutMs = 30000;
+constexpr qint64 kResponseLimit = 1024 * 1024;
+QNetworkReply *boundedReply(QNetworkReply *reply)
+{
+    if (!reply) return nullptr;
+    reply->setReadBufferSize(kResponseLimit + 1);
+    QObject::connect(reply, &QNetworkReply::readyRead, reply, [reply]() {
+        if (reply->bytesAvailable() > kResponseLimit) {
+            reply->setProperty("responseTooLarge", true);
+            reply->abort();
+        }
+    });
+    return reply;
+}
 
 QString multipartParameter(const QString& value)
 {
@@ -239,7 +252,7 @@ QNetworkReply* TargetUploader::upload(const QString& filePath, QNetworkAccessMan
             return nullptr;
         }
         file->setParent(reply);
-        return reply;
+        return boundedReply(reply);
     }
 
     if (m_targetConfig.request.type == RequestBodyType::Multipart) {
@@ -278,7 +291,7 @@ QNetworkReply* TargetUploader::upload(const QString& filePath, QNetworkAccessMan
 
         QNetworkReply* reply = manager->post(requestObj, multi);
         multi->setParent(reply);
-        return reply;
+        return boundedReply(reply);
     }
 
     if (m_targetConfig.request.type == RequestBodyType::FormUrlencoded) {
@@ -300,7 +313,7 @@ QNetworkReply* TargetUploader::upload(const QString& filePath, QNetworkAccessMan
             return nullptr;
         }
         buffer->setParent(reply);
-        return reply;
+        return boundedReply(reply);
     }
 
     if (m_targetConfig.request.type == RequestBodyType::Json) {
@@ -321,7 +334,7 @@ QNetworkReply* TargetUploader::upload(const QString& filePath, QNetworkAccessMan
             return nullptr;
         }
         buffer->setParent(reply);
-        return reply;
+        return boundedReply(reply);
     }
 
     return nullptr;
@@ -340,6 +353,11 @@ UploadResult TargetUploader::parseReply(QNetworkReply* reply) const
     const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     result.responseInfo = buildResponseInfo(reply, responseText);
 
+    if (reply->property("responseTooLarge").toBool()) {
+        result.responseInfo.responseText = result.responseInfo.responseText.left(kResponseLimit);
+        result.errorMessage = QStringLiteral("Upload stopped: response exceeds 1 MiB.");
+        return result;
+    }
     if (statusCode >= 400) {
         result.errorMessage = extractErrorMessage(m_targetConfig.response, reply, body, responseText);
         return result;

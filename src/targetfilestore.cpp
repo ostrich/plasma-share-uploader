@@ -12,6 +12,7 @@
 #include <QTemporaryFile>
 #include <QUrl>
 #include <QUrlQuery>
+#include <QSet>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
@@ -21,7 +22,12 @@ QString absolute(const QString &path) { return QDir::cleanPath(QFileInfo(path).a
 bool exists(const QString &path) { const QFileInfo f(path); return f.exists() || f.isSymLink(); }
 QString lockPath(const QString &active) { return QFileInfo(active).absolutePath() + QStringLiteral("/.target-manager.lock"); }
 const QRegularExpression sensitive(QStringLiteral("authorization|cookie|password|passwd|secret|token|api.?key|userhash|^key$"), QRegularExpression::CaseInsensitiveOption);
-bool reference(const QString &text) { return text.contains(QStringLiteral("${ENV:")) || text.contains(QStringLiteral("${WALLET:")); }
+bool reference(const QString &text)
+{
+    static const QRegularExpression pattern(QStringLiteral(
+        R"(\A(?:(?:Bearer|Basic) )?\$\{(?:ENV:[A-Za-z_][A-Za-z0-9_]*|WALLET:[A-Za-z0-9_.-]+)\}\z)"));
+    return pattern.match(text).hasMatch();
+}
 
 QJsonValue exportValue(const QJsonValue &value, const QString &path, const QString &id, QStringList *redacted)
 {
@@ -143,15 +149,18 @@ QString TargetFileStore::uniqueId(QString base) const
 {
     base = base.toLower().replace(QRegularExpression(QStringLiteral("[^a-z0-9_-]")), QStringLiteral("_"));
     if (base.isEmpty() || !base.front().isLetterOrNumber()) base.prepend(QStringLiteral("target"));
+    QSet<QString> used;
+    for (const auto &entry : entries()) {
+        if (!entry.editable()) continue;
+        used.insert(entry.object.value(QStringLiteral("id")).toString());
+        used.insert(QFileInfo(entry.path).completeBaseName());
+    }
     QString candidate = base;
     int index = 2;
-    for (;;) {
-        bool used = exists(activePath() + QLatin1Char('/') + candidate + QStringLiteral(".json")) ||
-            exists(activePath() + QStringLiteral("/disabled/") + candidate + QStringLiteral(".json"));
-        for (const auto &entry : entries()) if (entry.editable() && entry.object.value(QStringLiteral("id")).toString() == candidate) used = true;
-        if (!used) return candidate;
+    while (used.contains(candidate) || exists(activePath() + QLatin1Char('/') + candidate + QStringLiteral(".json"))
+           || exists(activePath() + QStringLiteral("/disabled/") + candidate + QStringLiteral(".json")))
         candidate = base + QLatin1Char('_') + QString::number(index++);
-    }
+    return candidate;
 }
 
 QString TargetFileStore::save(const QString &path, const QByteArray &bytes, const QByteArray &expected, bool allowInvalid) const

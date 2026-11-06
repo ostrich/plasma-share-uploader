@@ -52,12 +52,7 @@ ColumnLayout {
 
                 activeFocusOnTab: true
                 boundsBehavior: Flickable.StopAtBounds
-                currentIndex: {
-                    root.controller.selectedPath;
-                    root.controller.filterKind;
-                    root.controller.search;
-                    return root.controller.targets.indexOfPath(root.controller.selectedPath);
-                }
+                currentIndex: root.controller.selectedIndex
                 keyNavigationEnabled: false
                 model: root.controller.targets
                 objectName: "targetList"

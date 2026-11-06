@@ -114,13 +114,46 @@ Item {
         width: Math.min(720, Overlay.overlay.width - 40)
 
         ScrollView {
+            id: issueScroll
             anchors.fill: parent
             clip: true
 
-            TextArea {
-                readOnly: true
-                text: root.controller.diagnosticText
-                wrapMode: TextEdit.Wrap
+            ColumnLayout {
+                width: issueScroll.availableWidth
+                Label {
+                    Layout.fillWidth: true
+                    visible: root.controller.issues.length > 0 && text.length > 0
+                    text: root.controller.diagnosticNotice
+                    textFormat: Text.PlainText
+                    wrapMode: Text.Wrap
+                }
+                Repeater {
+                    model: root.controller.issues
+                    delegate: Button {
+                        id: issueButton
+                        required property int index
+                        required property var modelData
+                        Layout.fillWidth: true
+                        objectName: "diagnosticIssue." + index
+                        text: modelData.message
+                        contentItem: Label {
+                            text: issueButton.text
+                            textFormat: Text.PlainText
+                            wrapMode: Text.Wrap
+                        }
+                        onClicked: {
+                            details.close();
+                            root.controller.activateIssue(index);
+                        }
+                    }
+                }
+                Label {
+                    Layout.fillWidth: true
+                    visible: root.controller.issues.length === 0
+                    text: root.controller.diagnosticText
+                    textFormat: Text.PlainText
+                    wrapMode: Text.Wrap
+                }
             }
         }
     }

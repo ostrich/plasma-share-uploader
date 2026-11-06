@@ -329,3 +329,13 @@ Linked packaged presets receive the new format with the matching package upgrade
 Independent customized copies need the edits above. Keep a staged test build's
 converted targets in a separate directory while the installed plugin still uses
 the older format.
+
+## Runtime resource limits
+
+Upload responses are limited to 1 MiB. Preprocessing keeps only the last 64 KiB
+of each command's stdout and stderr, with a truncation marker in diagnostics.
+Command placeholders are expanded once: placeholder-like text in a filename is
+preserved literally. Each command runs in its own Unix session; timeout,
+cancellation, or command completion terminates remaining processes in that
+process group. Preprocessing commands should complete their work synchronously
+and should not launch detached services.
