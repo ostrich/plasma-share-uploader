@@ -57,7 +57,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
 cmake --build build --parallel
 ```
 
-An Arch Linux package recipe and dependency list are in [arch/PKGBUILD](arch/PKGBUILD).
+An Arch Linux package recipe and dependency list are in [packaging/arch/PKGBUILD](packaging/arch/PKGBUILD).
 
 ## Install
 
